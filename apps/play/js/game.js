@@ -1,5 +1,6 @@
 // Being in a room: keys become input messages, snapshots are buffered and drawn every
 // animation frame a little in the past, and the side panel shows the score and roster.
+// The player can turn on the heatmap cheat.
 //
 // Score is each explorer's credit: the expected number of events its looking resolved,
 // the same quantity the guard agents are trained to maximise (minus energy).
@@ -44,6 +45,13 @@ export class Game {
     this.onBlur = () => {
       if (this.intent.releaseAll()) connection.send(this.intent.message());
     };
+    // The heatmap choice belongs to the session, so it carries over from room to room.
+    elements.heatmap.onchange = () => {
+      connection.send({ type: 'heatmap', on: elements.heatmap.checked });
+      if (!elements.heatmap.checked) this.view.setHeat(null);
+      elements.canvas.focus();
+    };
+    if (elements.heatmap.checked) connection.send({ type: 'heatmap', on: true });
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
@@ -56,6 +64,10 @@ export class Game {
   onState(snapshot) {
     this.snapshots.push(snapshot, performance.now());
     this.showPanel(snapshot);
+  }
+
+  onHeat(message) {
+    if (this.elements.heatmap.checked) this.view.setHeat(message);
   }
 
   loop(now) {

@@ -1,5 +1,6 @@
 // Draws a room: the floor the player is on, with open doors, stairs and chairs, every
-// explorer on that floor with its view cone, and events spotted in the last moments.
+// explorer on that floor with its view cone, events spotted in the last moments, and, for
+// players who turn it on, the heatmap of where unspotted events are likely to be.
 // The map is decoded and its doors grouped exactly as the room server does, so the
 // server's door indices line up with ours.
 
@@ -31,6 +32,26 @@ export class RoomView {
     this.raster.height = height;
     this.rasterKey = null;
     this.colors = new Map();
+    this.heat = null; // { block, canvases: one per floor } while the heatmap is on
+  }
+
+  /** Show the room's heatmap (a 'heat' message), or hide it with null. */
+  setHeat(message) {
+    if (!message) {
+      this.heat = null;
+      return;
+    }
+    const canvases = message.floors.map(encoded => {
+      const values = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      const canvas = document.createElement('canvas');
+      canvas.width = message.width;
+      canvas.height = message.height;
+      const context = canvas.getContext('2d'), image = context.createImageData(message.width, message.height);
+      values.forEach((value, i) => image.data.set(heatColor(value), i * 4));
+      context.putImageData(image, 0, 0);
+      return canvas;
+    });
+    this.heat = { block: message.block, canvases };
   }
 
   colorFor(id) {
@@ -75,6 +96,12 @@ export class RoomView {
     ctx.fillStyle = COLORS[MATERIAL.FLOOR];
     ctx.fillRect(0, 0, map.width, map.height);
     ctx.drawImage(this.raster, 0, 0);
+    const heat = this.heat?.canvases[floor];
+    if (heat) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(heat, 0, 0, heat.width * this.heat.block, heat.height * this.heat.block);
+      ctx.imageSmoothingEnabled = false;
+    }
 
     for (const stair of map.stairs) if (connectsFloor(stair, floor)) this.drawStair(stair);
     for (const chair of map.chairs) {
@@ -151,4 +178,12 @@ export class RoomView {
     ctx.fillStyle = '#263d36';
     ctx.fillText(isSelf ? 'You' : explorer.name, x, y - radius - 5 / scale);
   }
+}
+
+/** Heatmap colour for a byte: clear, through amber, to red as unspotted events become likely. */
+function heatColor(value) {
+  const t = value / 255;
+  if (!value) return [0, 0, 0, 0];
+  const r = 221 + (205 - 221) * t, g = 164 + (62 - 164) * t, b = 87 + (52 - 87) * t;
+  return [r, g, b, Math.round(255 * (0.15 + 0.6 * t))];
 }

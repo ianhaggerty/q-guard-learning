@@ -10,6 +10,7 @@ const roomElements = {
   canvas: byId('roomCanvas'), floor: byId('floorLabel'), title: byId('roomTitle'), code: byId('roomCode'),
   score: byId('hudScore'), team: byId('hudTeam'), unspotted: byId('hudUnspotted'), spotted: byId('hudSpotted'),
   kcal: byId('hudKcal'), pose: byId('hudPose'), time: byId('hudTime'), roster: byId('roster'),
+  heatmap: byId('heatmapToggle'),
 };
 
 let socket = null, session = null, plans = [], game = null;
@@ -45,6 +46,9 @@ const handlers = {
   },
   state(message) {
     game?.onState(message);
+  },
+  heat(message) {
+    game?.onHeat(message);
   },
   left() {
     showLobby();
