@@ -7,3 +7,4 @@ labels:
       app.kubernetes.io/part-of: pixel-map-lab
 resources:
   - web.yaml
+  - api.yaml
