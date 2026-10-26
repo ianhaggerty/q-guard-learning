@@ -8,3 +8,4 @@ labels:
 resources:
   - web.yaml
   - api.yaml
+  - room-server.yaml
