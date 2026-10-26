@@ -1,4 +1,5 @@
-"""The agent service: checkpoint choice, valid actions for any team, and the HTTP API.
+"""The agent service: checkpoint choice, valid actions for any team, players' tuned agents,
+and the HTTP API.
 
 Run from the repository root:
     PYTHONPATH=artifacts:services/agent-inference python3 -m unittest discover -s services/agent-inference/tests
@@ -66,6 +67,59 @@ class PolicyTest(unittest.TestCase):
             POLICIES.act({**request('2', explorers, [0]), 'plan': '99'})
 
 
+def teach(player, plan_id, explorers, action, blend, times):
+    body = {**request(plan_id, explorers, [0]), 'player': player, 'agent': 0, 'action': action, 'blend': blend}
+    del body['agents']
+    for _ in range(times):
+        status = POLICIES.demonstrate(body)
+    while POLICIES.tuned.train_once():
+        pass
+    return status
+
+
+class TuningTest(unittest.TestCase):
+    def setUp(self):
+        self.explorers = [at_start('2')]
+        self.pretrained = POLICIES.act(request('2', self.explorers, [0]))[0]
+        # Something the pretrained agent would not do here: sprint south looking west.
+        self.taught = [3, 2, 6] if self.pretrained != [3, 2, 6] else [7, 1, 2]
+
+    def tearDown(self):
+        POLICIES.tuned.forget('ann')
+        POLICIES.tuned.forget('bob')
+
+    def drive(self, owner):
+        return POLICIES.act({**request('2', self.explorers, [0]), 'owners': [owner]})[0]
+
+    def test_copying_the_player_learns_their_action(self):
+        status = teach('ann', '2', self.explorers, self.taught, blend=1.0, times=48)
+        self.assertEqual(status['demos'], 48)
+        self.assertGreaterEqual(POLICIES.status('ann', '2')['updates'], 48)
+        self.assertEqual(self.drive('ann'), self.taught)
+        self.assertEqual(self.drive('bob'), self.pretrained, 'other players keep the pretrained agent')
+        self.assertEqual(self.drive(None), self.pretrained)
+
+    def test_staying_pretrained_ignores_the_player(self):
+        teach('bob', '2', self.explorers, self.taught, blend=0.0, times=48)
+        self.assertEqual(self.drive('bob'), self.pretrained)
+
+    def test_reset_and_forget_bring_back_the_pretrained_agent(self):
+        teach('ann', '2', self.explorers, self.taught, blend=1.0, times=48)
+        POLICIES.tuned.reset('ann', '2')
+        self.assertEqual(self.drive('ann'), self.pretrained)
+        self.assertEqual(POLICIES.status('ann', '2')['demos'], 0)
+        teach('ann', '2', self.explorers, self.taught, blend=1.0, times=8)
+        POLICIES.tuned.forget('ann')
+        self.assertIsNone(POLICIES.tuned.get('ann', '2'))
+
+    def test_demonstrations_are_validated(self):
+        body = {**request('2', self.explorers, [0]), 'player': 'ann', 'agent': 0, 'action': [10, 0, 0]}
+        with self.assertRaises(ValueError):
+            POLICIES.demonstrate(body)
+        with self.assertRaises(ValueError):
+            POLICIES.act({**request('2', self.explorers, [0]), 'owners': ['a', 'b']})
+
+
 class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -78,9 +132,9 @@ class ServerTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
 
-    def post(self, body):
+    def post(self, body, path='/act'):
         data = json.dumps(body).encode()
-        req = urllib.request.Request(self.url + '/act', data=data, headers={'Content-Type': 'application/json'})
+        req = urllib.request.Request(self.url + path, data=data, headers={'Content-Type': 'application/json'})
         with urllib.request.urlopen(req, timeout=30) as response:
             return json.loads(response.read())
 
@@ -92,6 +146,14 @@ class ServerTest(unittest.TestCase):
     def test_act_over_http(self):
         reply = self.post(request('2', [at_start('2')], [0]))
         self.assertEqual(len(reply['actions']), 1)
+
+    def test_teaching_resetting_and_forgetting_over_http(self):
+        body = {**request('2', [at_start('2')], [0]), 'player': 'carol', 'agent': 0, 'action': [1, 0, 0], 'blend': 0.7}
+        del body['agents']
+        status = self.post(body, '/demonstrate')
+        self.assertEqual((status['demos'], status['blend']), (1, 0.7))
+        self.assertEqual(self.post({'player': 'carol', 'plan': '2'}, '/reset'), {})
+        self.assertEqual(self.post({'player': 'carol'}, '/forget'), {})
 
     def test_bad_requests_get_400(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:

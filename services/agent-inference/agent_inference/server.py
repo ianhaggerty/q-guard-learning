@@ -2,15 +2,22 @@
 
 POST /act takes one room's state (see policy.Policies.act) and returns
 {"actions": [[move, gait, gaze], ...]} for the explorers the agent drives. Room servers call
-it every 0.5 s for each room with an agent in control. It keeps no room state, only caches
-(plans, checkpoints, environments), so it scales horizontally.
+it every 0.5 s for each room with an agent in control.
+
+Players' own agents (see tuning.py) are taught and managed with
+  POST /demonstrate  one moment of a player's play -> {"demos", "updates", "blend"}
+  POST /reset        {"player", "plan"}: back to the pretrained agent on that plan
+  POST /forget       {"player"}: the player has gone; drop all their agents
+and trained by a background thread. Tuned models live in this process, so every request
+for a player must reach the same replica (one replica until rooms are routed in phase 5).
 
 Start-up loads and warms every plan and checkpoint in the background: /healthz answers at
 once, /readyz once that is done. Decisions are serialised (the cached environments are
 shared), and take a couple of milliseconds each.
 
 Environment: PORT (8080), PLANS_DIR and MODELS_DIR (the repository's plans and
-artifacts/final_models), GUARDRL_CACHE_DIR (line-of-sight caches).
+artifacts/final_models), GUARDRL_CACHE_DIR (line-of-sight caches), MAX_TUNED_MODELS (32
+players' agents kept at once).
 """
 import json
 import os
@@ -26,6 +33,13 @@ MAX_REQUEST_BYTES = 4 << 20
 
 
 def make_handler(policies, ready):
+    routes = {
+        '/act': lambda body: {'actions': policies.act(body)},
+        '/demonstrate': policies.demonstrate,
+        '/reset': lambda body: (policies.tuned.reset(str(body['player']), str(body['plan'])), {})[1],
+        '/forget': lambda body: (policies.tuned.forget(str(body['player'])), {})[1],
+    }
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == '/healthz':
@@ -36,19 +50,21 @@ def make_handler(policies, ready):
                 self.send_error(404)
 
         def do_POST(self):
-            if self.path != '/act':
-                self.send_error(404)
-                return
             length = int(self.headers.get('Content-Length') or 0)
             if not 0 < length <= MAX_REQUEST_BYTES:
                 self.reply(413, b'{"error": "request too large or empty"}')
                 return
             try:
-                actions = policies.act(json.loads(self.rfile.read(length)))
+                body = json.loads(self.rfile.read(length))
+                handler = routes.get(self.path)
+                if handler is None:
+                    self.send_error(404)
+                    return
+                result = handler(body)
             except (KeyError, ValueError, TypeError) as error:
                 self.reply(400, json.dumps({'error': str(error)}).encode())
                 return
-            self.reply(200, json.dumps({'actions': actions}).encode())
+            self.reply(200, json.dumps(result).encode())
 
         def reply(self, status, body, content_type='application/json'):
             self.send_response(status)
@@ -64,8 +80,9 @@ def make_handler(policies, ready):
 
 
 def serve(port=8080, plans_dir=None, models_dir=None, preload=True):
-    """Start serving in a background thread. Returns (server, ready event)."""
+    """Start serving, and training players' agents, in background threads. Returns (server, ready event)."""
     policies, ready = Policies(plans_dir, models_dir), threading.Event()
+    policies.tuned.start()
     server = ThreadingHTTPServer(('', port), make_handler(policies, ready))
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
