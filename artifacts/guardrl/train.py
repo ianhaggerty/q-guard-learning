@@ -202,11 +202,11 @@ def train(cfg):
     return agent, log
 
 
-def main():
+def config_from_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', type=str, default=None, help='JSON file with overrides')
     ap.add_argument('--set', nargs='*', default=[], help='key=value overrides (JSON values)')
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     cfg = default_config()
     if args.config:
         cfg.update(json.load(open(args.config)))
@@ -216,7 +216,11 @@ def main():
             cfg[k] = json.loads(v)
         except json.JSONDecodeError:
             cfg[k] = v
-    train(cfg)
+    return cfg
+
+
+def main():
+    train(config_from_args())
 
 
 if __name__ == '__main__':
