@@ -72,6 +72,7 @@ h1 em { font-style: normal; color: var(--muted); }
 .toggle { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
 .toggle input { accent-color: var(--ink); }
 .cheat { font: 600 10px 'Space Grotesk', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #cd3e34; border: 1px solid #cd3e3466; border-radius: 4px; padding: 1px 5px; }
+.roster em { font: normal 600 10px 'Space Grotesk', sans-serif; text-transform: uppercase; letter-spacing: .06em; color: #4c8a83; }
 .hud { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0 0 18px; }
 .hud dt { font-size: 11px; color: var(--muted); }
 .hud dd { margin: 2px 0 0; font: 600 20px 'Space Grotesk', sans-serif; }

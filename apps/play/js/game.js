@@ -1,6 +1,7 @@
 // Being in a room: keys become input messages, snapshots are buffered and drawn every
 // animation frame a little in the past, and the side panel shows the score and roster.
-// The player can turn on the heatmap cheat.
+// The player can hand their explorer to the autopilot (a pretrained guard agent; keys are
+// then ignored until they take it back) and can turn on the heatmap cheat.
 //
 // Score is each explorer's credit: the expected number of events its looking resolved,
 // the same quantity the guard agents are trained to maximise (minus energy).
@@ -18,32 +19,50 @@ const score = credit => (credit * 1000).toFixed(1);
 export class Game {
   /**
    * connection: { send(message) }; elements: the room view's DOM nodes; selfId: this
-   * session's id; joined: the server's 'joined' message.
+   * session's id; joined: the server's 'joined' message; autopilot: whether the server
+   * offers the autopilot.
    */
-  constructor({ connection, elements, selfId, joined }) {
+  constructor({ connection, elements, selfId, joined, autopilot }) {
     this.connection = connection;
     this.elements = elements;
     this.selfId = selfId;
     this.view = new RoomView(elements.canvas, joined.map);
     this.snapshots = new SnapshotBuffer();
     this.intent = new Intent();
+    this.autopilot = false;
     this.frame = 0;
     elements.title.textContent = joined.room.planName;
     elements.code.textContent = joined.room.id;
 
+    // Keys always update the intent, but only reach the server while the player is driving.
+    const sendIntent = () => {
+      if (!this.autopilot) connection.send(this.intent.message());
+    };
     this.onKeyDown = event => {
       if (event.ctrlKey || event.metaKey || event.altKey || event.target.matches('input, textarea, select')) return;
       const change = this.intent.press(event.key);
       if (!change) return;
       event.preventDefault();
-      if (change === 'sit' && !event.repeat) connection.send({ type: 'sit' });
-      if (change === 'input') connection.send(this.intent.message());
+      if (change === 'sit' && !event.repeat && !this.autopilot) connection.send({ type: 'sit' });
+      if (change === 'input') sendIntent();
     };
     this.onKeyUp = event => {
-      if (this.intent.release(event.key)) connection.send(this.intent.message());
+      if (this.intent.release(event.key)) sendIntent();
     };
     this.onBlur = () => {
-      if (this.intent.releaseAll()) connection.send(this.intent.message());
+      if (this.intent.releaseAll()) sendIntent();
+    };
+
+    elements.autopilot.hidden = !autopilot;
+    elements.autopilotNote.hidden = autopilot;
+    this.showAutopilot();
+    elements.autopilot.onclick = () => {
+      this.autopilot = !this.autopilot;
+      connection.send({ type: 'autopilot', on: this.autopilot });
+      // Taking control back: carry on with whatever keys are held now.
+      if (!this.autopilot) connection.send(this.intent.message());
+      this.showAutopilot();
+      elements.canvas.focus();
     };
     // The heatmap choice belongs to the session, so it carries over from room to room.
     elements.heatmap.onchange = () => {
@@ -68,6 +87,13 @@ export class Game {
 
   onHeat(message) {
     if (this.elements.heatmap.checked) this.view.setHeat(message);
+  }
+
+  showAutopilot() {
+    const { autopilot } = this.elements;
+    autopilot.textContent = this.autopilot ? 'Take back control' : 'Let the agent drive';
+    autopilot.setAttribute('aria-pressed', this.autopilot);
+    autopilot.classList.toggle('outline', !this.autopilot);
   }
 
   loop(now) {
@@ -100,6 +126,11 @@ export class Game {
       swatch.style.background = this.view.colorFor(explorer.id);
       const name = document.createElement('span');
       name.textContent = explorer.id === this.selfId ? `${explorer.name} (you)` : explorer.name;
+      if (explorer.autopilot) {
+        const badge = document.createElement('em');
+        badge.textContent = 'agent';
+        name.append(' ', badge);
+      }
       const where = document.createElement('small');
       where.textContent = this.view.map.floors[explorer.floor].name;
       const points = document.createElement('b');
