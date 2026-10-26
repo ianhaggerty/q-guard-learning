@@ -70,7 +70,7 @@ export class ProbabilityField {
     for (let j = 0; j < candidates.length; j++) {
       const floor = Math.floor(candidates[j] / floorSize), i = candidates[j] % floorSize;
       let chance = 0;
-      if (floor === world.floorIndex && world.map.pixels[i] === MATERIAL.OPAQUE) {
+      if (floor === world.floorIndex && world.map.floors[floor].pixels[i] === MATERIAL.OPAQUE) {
         // Wall surfaces are seen through their neighbours; World handles that rule.
         chance = world.detectionAt(i % width + 0.5, Math.floor(i / width) + 0.5);
       } else if (floor === world.floorIndex) {

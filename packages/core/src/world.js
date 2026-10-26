@@ -2,7 +2,9 @@
 // position, floor, facing and posture, the door states, and the energy, event and
 // probability models, all advanced together by `advance`.
 //
-// Exploring never changes saved map data: open doors stay encoded as door pixels.
+// Exploring never changes saved map data: open doors stay encoded as door pixels, and
+// the map's active floor is left to the caller. The explorer reads its own floor's
+// pixels, so a view of another floor does not affect it.
 
 import { MATERIAL } from './materials.js';
 import { CHAIR_SIZE, EXPLORER_RADIUS, METRES_PER_PIXEL } from './scale.js';
@@ -72,7 +74,6 @@ export class World {
 
   activateFloor(index) {
     this.floorIndex = index;
-    this.map.activeFloor = index;
     this.doors = this.floorDoors[index].doors;
     this.doorIds = this.floorDoors[index].ids;
   }
@@ -81,7 +82,7 @@ export class World {
   effectiveMaterial(x, y) {
     x = Math.floor(x);
     y = Math.floor(y);
-    const { width, height, pixels } = this.map;
+    const { width, height } = this.map, pixels = this.map.floors[this.floorIndex].pixels;
     if (x < 0 || y < 0 || x >= width || y >= height) return MATERIAL.OPAQUE;
     const i = y * width + x, material = pixels[i];
     return material === MATERIAL.DOOR && this.doors[this.doorIds[i]].open ? MATERIAL.FLOOR : material;
@@ -322,7 +323,7 @@ export class World {
     const cellX = Math.floor(x), cellY = Math.floor(y), { width, height } = this.map;
     if (!seconds || cellX < 0 || cellY < 0 || cellX >= width || cellY >= height) return 0;
     let chance = 0;
-    if (this.map.pixels[cellY * width + cellX] === MATERIAL.OPAQUE) {
+    if (this.map.floors[this.floorIndex].pixels[cellY * width + cellX] === MATERIAL.OPAQUE) {
       for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
         const nx = cellX + dx, ny = cellY + dy;
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;

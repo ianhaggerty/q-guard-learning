@@ -32,6 +32,7 @@ function createWorld() {
   world.events.setRate(eventRateFromInput());
   world.setGait(byId('gaitSelect').value);
   world.setLook(byId('lookSelect').value);
+  state.map.activeFloor = world.floorIndex;
   return world;
 }
 
@@ -104,6 +105,8 @@ export function tickExplore(seconds) {
   const [dx, dy] = movementVector();
   if (world.advance(seconds, dx, dy)) invalidateRaster();
   if (announcedFloor !== world.floorIndex) {
+    // The world never changes the map's active floor; the view follows the explorer.
+    state.map.activeFloor = world.floorIndex;
     const previous = announcedFloor;
     announcedFloor = world.floorIndex;
     syncFloors();
