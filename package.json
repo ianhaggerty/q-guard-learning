@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "start": "node scripts/serve.js"
+    "start": "node scripts/serve.js",
+    "build:web": "npm run build -w apps/web"
   }
 }

@@ -5,7 +5,8 @@
 // the page half-loaded; Node's server does not have that limit.
 //
 // The page is apps/web/, except js/core/, which is served from packages/core/src/ so the
-// browser runs the same core as the tests and the game servers.
+// browser runs the same core as the tests and the game servers (`npm run build:web`
+// produces the same layout as a single static folder).
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
