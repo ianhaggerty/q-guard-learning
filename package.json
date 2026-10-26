@@ -2,6 +2,7 @@
   "name": "pixel-map-lab",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Raster map editor and exploration game",
   "type": "module",
   "scripts": {
