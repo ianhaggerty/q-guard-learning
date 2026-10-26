@@ -36,6 +36,7 @@ export class World {
    * options.startIndex: which numbered start the primary explorer begins from (default Start 1)
    * options.empty:      start with no explorers; add them with addExplorer
    * options.random:     random number source for the event simulation
+   * options.sightCacheBytes: memory for line of sight shared by the explorers (see sight.js)
    */
   constructor(map, options = {}) {
     this.map = ensureMap(map);
@@ -49,7 +50,7 @@ export class World {
     if (!options.empty) this.addExplorer({ startIndex: options.startIndex ?? 0 });
 
     this.events = new EventSimulation(this.map, options.random || Math.random);
-    this.probabilities = new ProbabilityField(this.events);
+    this.probabilities = new ProbabilityField(this.events, { sightCacheBytes: options.sightCacheBytes });
   }
 
   // -------------------------------------------------------------------------

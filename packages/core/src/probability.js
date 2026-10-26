@@ -15,6 +15,7 @@ import { METRES_PER_PIXEL } from './scale.js';
 import { MATERIAL } from './materials.js';
 import { FIELD_OF_VIEW, detectionChance, hazardFromChance } from './detection.js';
 import { eccentricityDegrees, headingVector } from './facing.js';
+import { SightCache } from './sight.js';
 
 /** The closed-form solution of dm/dt = λ − μm over `seconds`, without input checks. */
 function integrateMean(mean, arrivalRate, detectionRate, seconds) {
@@ -30,8 +31,6 @@ export function updateUnresolvedMean(mean, arrivalRate, detectionRate, seconds) 
   return integrateMean(mean, arrivalRate, detectionRate, seconds);
 }
 
-const SIGHT_UNKNOWN = 0, SIGHT_VISIBLE = 1, SIGHT_HIDDEN = 2;
-
 /**
  * A point whose direction makes cos(angle) < this with the facing is more than 100° off
  * centre, where the detection chance is exactly zero. The margin keeps the test conservative.
@@ -39,7 +38,8 @@ const SIGHT_UNKNOWN = 0, SIGHT_VISIBLE = 1, SIGHT_HIDDEN = 2;
 const COS_BEYOND_FIELD_OF_VIEW = Math.cos(FIELD_OF_VIEW * Math.PI / 360) - 1e-9;
 
 export class ProbabilityField {
-  constructor(events) {
+  /** options.sightCacheBytes: memory for line-of-sight shared by all explorers (see sight.js) */
+  constructor(events, options = {}) {
     this.events = events;
     this.map = events.map;
     const { candidates } = events, count = candidates.length;
@@ -67,9 +67,9 @@ export class ProbabilityField {
       this.floorStart[floor] = Math.max(this.floorStart[floor], this.floorStart[floor - 1]);
     }
 
-    // Each explorer's own hazards, recomputed only when something that affects them
-    // changes. Line of sight is cached separately and only depends on the explorer's pixel.
+    // Each explorer's own hazards, recomputed only when something that affects them changes.
     this.views = new Map();
+    this.sight = new SightCache(this.map, options.sightCacheBytes);
   }
 
   advance(seconds, world) {
@@ -91,8 +91,7 @@ export class ProbabilityField {
     let view = this.views.get(explorer);
     if (!view) {
       // `floor`: the floor whose candidates hold this explorer's nonzero hazards.
-      const count = this.events.candidates.length;
-      view = { poseKey: null, floor: null, sightKey: null, sightCache: new Uint8Array(count), hazards: new Float64Array(count) };
+      view = { poseKey: null, floor: null, hazards: new Float64Array(this.events.candidates.length) };
       this.views.set(explorer, view);
     }
     const doorStates = explorer.doors.map(door => +door.open);
@@ -110,20 +109,17 @@ export class ProbabilityField {
    */
   updateHazards(view, explorer, world, doorStates) {
     const { position, floorIndex } = explorer, { floorStart, candidatePixel, candidateX, candidateY } = this;
-    const sightKey = [Math.floor(position.x), Math.floor(position.y), floorIndex, ...doorStates].join(':');
-    if (sightKey !== view.sightKey) {
-      view.sightKey = sightKey;
-      view.sightCache.fill(SIGHT_UNKNOWN);
-    }
     if (view.floor !== null && view.floor !== floorIndex) view.hazards.fill(0, floorStart[view.floor], floorStart[view.floor + 1]);
     view.floor = floorIndex;
+    const entry = this.sight.entryFor(explorer, doorStates);
+    const lineOfSight = (x, y) => this.sight.visible(entry, x, y);
     const pixels = this.map.floors[floorIndex].pixels, heading = headingVector(explorer.facing);
     for (let j = floorStart[floorIndex]; j < floorStart[floorIndex + 1]; j++) {
       const x = candidateX[j], y = candidateY[j];
       let chance = 0;
       if (pixels[candidatePixel[j]] === MATERIAL.OPAQUE) {
         // Wall surfaces are seen through their neighbours; Explorer handles that rule.
-        chance = explorer.detectionAt(x, y);
+        chance = explorer.detectionAt(x, y, 1, lineOfSight);
       } else {
         const dx = x - position.x, dy = y - position.y, distance = Math.hypot(dx, dy);
         if (dx * heading.x + dy * heading.y < distance * COS_BEYOND_FIELD_OF_VIEW) {
@@ -132,10 +128,7 @@ export class ProbabilityField {
         }
         const eccentricity = distance ? eccentricityDegrees(dx, dy, heading) : 0;
         chance = detectionChance(distance * METRES_PER_PIXEL, eccentricity, world.detectionHalfRange);
-        if (chance > 0) {
-          if (view.sightCache[j] === SIGHT_UNKNOWN) view.sightCache[j] = explorer.visibleTo(x, y) ? SIGHT_VISIBLE : SIGHT_HIDDEN;
-          if (view.sightCache[j] === SIGHT_HIDDEN) chance = 0;
-        }
+        if (chance > 0 && !lineOfSight(x, y)) chance = 0;
       }
       view.hazards[j] = hazardFromChance(chance);
     }

@@ -222,7 +222,11 @@ export class Explorer {
 
   /** In the field of view with no opaque pixel or closed door between the explorer and (x, y). */
   visibleTo(x, y) {
-    if (!this.inFieldOfView(x, y)) return false;
+    return this.inFieldOfView(x, y) && this.lineOfSight(x, y);
+  }
+
+  /** No opaque pixel or closed door between the explorer's pixel and (x, y), whichever way it faces. */
+  lineOfSight(x, y) {
     const from = { x: Math.floor(this.position.x), y: Math.floor(this.position.y) };
     const to = { x: Math.floor(x), y: Math.floor(y) };
     return traceLine(from, to, (cellX, cellY) => {
@@ -231,9 +235,12 @@ export class Explorer {
     });
   }
 
-  /** One-second detection probability for a point, taking sight lines into account. */
-  pointDetectionChance(x, y) {
-    if (!this.visibleTo(x, y)) return 0;
+  /**
+   * One-second detection probability for a point, taking sight lines into account.
+   * `lineOfSight(x, y)` may stand in for this explorer's own (ProbabilityField passes a cached one).
+   */
+  pointDetectionChance(x, y, lineOfSight = null) {
+    if (!this.inFieldOfView(x, y) || !(lineOfSight ? lineOfSight(x, y) : this.lineOfSight(x, y))) return 0;
     const dx = x - this.position.x, dy = y - this.position.y, distance = Math.hypot(dx, dy);
     const eccentricity = distance ? eccentricityDegrees(dx, dy, headingVector(this.facing)) : 0;
     return detectionChance(distance * METRES_PER_PIXEL, eccentricity, this.world.detectionHalfRange);
@@ -243,8 +250,9 @@ export class Explorer {
    * Probability that this explorer detects an event at (x, y) on its floor within `seconds`.
    * An opaque pixel is seen through its surface: it takes the best chance among its
    * edge-adjacent see-through neighbours (floor, transparent mass, open doors).
+   * `lineOfSight` is passed on to pointDetectionChance.
    */
-  detectionAt(x, y, seconds = 1) {
+  detectionAt(x, y, seconds = 1, lineOfSight = null) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(seconds) || seconds < 0) {
       throw new Error('Invalid detection query.');
     }
@@ -257,11 +265,11 @@ export class Explorer {
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         const material = this.effectiveMaterial(nx, ny);
         if (material === MATERIAL.FLOOR || material === MATERIAL.TRANSPARENT) {
-          chance = Math.max(chance, this.pointDetectionChance(nx + 0.5, ny + 0.5));
+          chance = Math.max(chance, this.pointDetectionChance(nx + 0.5, ny + 0.5, lineOfSight));
         }
       }
     } else {
-      chance = this.pointDetectionChance(x, y);
+      chance = this.pointDetectionChance(x, y, lineOfSight);
     }
     return chanceOverTime(chance, seconds);
   }
