@@ -34,3 +34,7 @@ __pycache__/
 
 # Web build output
 /apps/web/build/
+
+# Python package build output
+/artifacts/build/
+*.egg-info/

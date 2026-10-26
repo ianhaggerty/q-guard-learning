@@ -1,0 +1,20 @@
+# Makes the guardrl simulator and learner installable (`pip install ./artifacts`), so the
+# agent-inference and trainer services can depend on it. Research scripts still run from
+# artifacts/ as described in README.md.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guardrl"
+version = "0.1.0"
+description = "Q-learning guards for Pixel Map Lab: numba simulator, observations and DQN learner"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26,<2.1", "numba>=0.60", "torch>=2.4"]
+
+[project.optional-dependencies]
+viz = ["matplotlib", "pillow"]
+
+[tool.setuptools]
+packages = ["guardrl"]
