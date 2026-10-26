@@ -1,10 +1,10 @@
-// Several explorers in one world: shared doors and chairs, independent floors and
-// energy, and deterministic stepping.
+// Several explorers in one world: shared doors, chairs and probability field, additive
+// detection, hazard-proportional credit, independent floors and deterministic stepping.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MATERIAL, World, addChair, alignGrid, chairFront, fillRect, normalizeMap } from '../src/index.js';
-import { blankBuilding, courtyard, seededRandom, within } from './helpers.js';
+import { blankBuilding, courtyard, seededRandom, weightedMap, within } from './helpers.js';
 
 const near = within(1e-9);
 
@@ -27,6 +27,17 @@ function place(world, poses) {
     return explorer;
   });
 }
+
+test('an empty world has no explorers, yet events arrive and the field grows unobserved', () => {
+  const world = new World(weightedMap([[0, 12, 9, 1]]), { empty: true, random: seededRandom() });
+  assert.equal(world.explorers.length, 0);
+  assert.equal(world.primary, undefined);
+  world.events.setRate(1);
+  world.advanceAll(5);
+  assert.ok(world.events.spawned > 0);
+  assert.equal(world.events.resolved, 0);
+  near(world.probabilities.sum, -Math.expm1(-5));
+});
 
 test('added explorers get unique ids and start at the chosen numbered start', () => {
   const map = courtyard();
@@ -126,6 +137,70 @@ test('removing an explorer frees its chair and lets its doors close', () => {
   assert.equal(world.primary.nearbyChair().id, 'seat');
 });
 
+test('detection hazards of different explorers add', () => {
+  const map = () => alignGrid(blankBuilding({ width: 36, height: 36, floorNames: ['Only'], spawn: { x: 6.5, y: 6.5, floor: 0 } }));
+  const poses = [{ x: 8.5, y: 10.5, heading: 0 }, { x: 25.5, y: 20.5, heading: 3 }];
+  const together = new World(map());
+  place(together, poses);
+  together.advanceAll(1);
+  const alone = poses.map(pose => {
+    const world = new World(map());
+    place(world, [pose]);
+    world.advanceAll(1);
+    return world.probabilities.hazards;
+  });
+  const { hazards } = together.probabilities;
+  let shared = 0;
+  for (let j = 0; j < hazards.length; j++) {
+    near(hazards[j], alone[0][j] + alone[1][j]);
+    if (alone[0][j] > 0 && alone[1][j] > 0) shared++;
+  }
+  assert.ok(shared > 0, 'some pixels are seen by both explorers');
+});
+
+test('credit is the detection reduction, shared in proportion to hazard', () => {
+  const map = () => alignGrid(blankBuilding({ width: 36, height: 36, floorNames: ['Only'], spawn: { x: 6.5, y: 6.5, floor: 0 } }));
+  const seconds = 2;
+  const unobserved = new World(map(), { empty: true });
+  unobserved.advanceAll(seconds);
+
+  // Two explorers at the same pose split the reduction evenly.
+  const twins = new World(map());
+  const [a, b] = place(twins, [{ x: 18.5, y: 18.5 }, { x: 18.5, y: 18.5 }]);
+  twins.advanceAll(seconds);
+  near(a.credit + b.credit, unobserved.probabilities.sum - twins.probabilities.sum);
+  near(a.credit, b.credit);
+  assert.ok(a.credit > 0);
+
+  // One explorer alone earns the whole reduction.
+  const solo = new World(map());
+  place(solo, [{ x: 18.5, y: 18.5 }]);
+  solo.advanceAll(seconds);
+  near(solo.primary.credit, unobserved.probabilities.sum - solo.probabilities.sum);
+});
+
+test('an explorer that sees none of the valued pixels earns no credit', () => {
+  const map = doorRoom();
+  map.floors[0].valueOverrides = Object.fromEntries(Array.from({ length: map.width * map.height }, (_, i) => [i, i % map.width > 21 ? 1 : 0]));
+  const world = new World(map);
+  const [left, right] = place(world, [{ x: 5, y: 4, heading: 0 }, { x: 30, y: 13, heading: 4 }]);
+  world.advanceAll(3);
+  assert.equal(left.credit, 0);
+  assert.ok(right.credit > 0);
+});
+
+test('a sampled event in view of a non-primary explorer is spotted', () => {
+  const world = new World(weightedMap([[0, 12, 9, 1]]), { random: seededRandom() });
+  const [primary, helper] = place(world, [{ x: 4.5, y: 9.5, floor: 1 }, { x: 8.5, y: 9.5 }]);
+  world.events.setRate(0);
+  const event = world.events.spawn();
+  event.detectionBudget = 1e-6;
+  assert.notEqual(primary.floorIndex, event.floor);
+  assert.ok(helper.detectionAt(event.x, event.y) > 0);
+  world.advanceAll(0.05);
+  assert.equal(world.events.resolved, 1);
+});
+
 test('each explorer is charged energy for its own activity', () => {
   const world = new World(doorRoom());
   const [runner, stander] = place(world, [{ x: 4, y: 4 }, { x: 10, y: 22 }]);
@@ -152,7 +227,7 @@ test('worlds given the same inputs one slice at a time stay identical', () => {
       world.advanceAll(0.05);
     }
     return JSON.stringify({
-      explorers: world.explorers.map(e => [e.position, e.floorIndex, e.facing, e.energy.kcal]),
+      explorers: world.explorers.map(e => [e.position, e.floorIndex, e.facing, e.energy.kcal, e.credit]),
       sum: world.probabilities.sum,
       events: [world.events.spawned, world.events.resolved],
     });

@@ -1,5 +1,5 @@
 // One explorer in a World: a person or an agent with its own position, floor, facing,
-// posture and energy. Explorers share the world's doors, events and probability
+// posture, energy and score. Explorers share the world's doors, events and probability
 // field, and they pass through each other.
 //
 // An explorer reads its own floor's pixels, never map.activeFloor, so explorers on
@@ -48,6 +48,9 @@ export class Explorer {
 
     this.distance = 0; // pixels travelled
     this.floorChanges = 0;
+    // The share of the probability field's detection reduction credited to this explorer:
+    // the score guard agents are trained on (see ProbabilityField.integrate).
+    this.credit = 0;
   }
 
   /** Try to move in direction (dx, dy) on every World.advanceAll; both zero to stay still. */

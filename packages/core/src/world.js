@@ -7,7 +7,9 @@
 //   * a door is open while any explorer on its floor is near it, and it is open for
 //     everyone, sight included;
 //   * explorers do not collide with each other;
-//   * a chair holds one explorer.
+//   * a chair holds one explorer;
+//   * detection hazards of different explorers add, and the probability field's detection
+//     reduction is credited to explorers in proportion to their hazards.
 // The Python simulator differs in one respect: it precomputes sight with only the doors
 // near the viewer open, so it cannot see through a door another guard holds open.
 //
@@ -32,6 +34,7 @@ const MAX_SLICE_SECONDS = 0.05;
 export class World {
   /**
    * options.startIndex: which numbered start the primary explorer begins from (default Start 1)
+   * options.empty:      start with no explorers; add them with addExplorer
    * options.random:     random number source for the event simulation
    */
   constructor(map, options = {}) {
@@ -43,7 +46,7 @@ export class World {
 
     this.explorers = [];
     this.nextExplorerId = 1;
-    this.addExplorer({ startIndex: options.startIndex ?? 0 });
+    if (!options.empty) this.addExplorer({ startIndex: options.startIndex ?? 0 });
 
     this.events = new EventSimulation(this.map, options.random || Math.random);
     this.probabilities = new ProbabilityField(this.events);
@@ -68,11 +71,7 @@ export class World {
     return explorer;
   }
 
-  /**
-   * Remove an explorer; its chair is freed and its doors close on the next advance.
-   * Returns whether it was here. Events and the probability field still follow the
-   * primary explorer, so keep at least one.
-   */
+  /** Remove an explorer; its chair is freed and its doors close on the next advance. Returns whether it was here. */
   removeExplorer(explorer) {
     const index = this.explorers.indexOf(explorer);
     if (index === -1) return false;
@@ -148,7 +147,7 @@ export class World {
     if (!Number.isFinite(dt) || dt < 0 || !Number.isFinite(dx) || !Number.isFinite(dy)) {
       throw new Error('Invalid simulation interval.');
     }
-    this.primary.setMovement(dx, dy);
+    this.primary?.setMovement(dx, dy);
     return this.advanceAll(dt);
   }
 
