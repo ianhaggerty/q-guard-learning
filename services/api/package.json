@@ -1,0 +1,11 @@
+{
+  "name": "@pixel-map-lab/api",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Accounts, lobby, plans, agents and fine-tuning jobs",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  }
+}
