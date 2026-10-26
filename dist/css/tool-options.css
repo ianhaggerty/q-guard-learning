@@ -1,0 +1,44 @@
+/* Option strips shown under the floor bar for the Starts, Stairs, Chair and Set values tools. */
+
+.start-options, .stair-options, .chair-options, .value-options { display: flex; align-items: flex-end; flex-wrap: wrap; }
+
+/* Starts */
+.start-options { gap: 12px; padding: 12px 17px; background: #edf2df; border-bottom: 1px solid #d1dac4; }
+.start-options label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; color: #6c765d; }
+.start-options select { padding: 7px; border: 1px solid #cbd5bf; border-radius: 4px; background: var(--panel); color: var(--ink); font-size: 11px; }
+.start-options button { font-size: 11px; }
+.start-options > span { flex-basis: 100%; font-size: 10px; color: #6c765d; line-height: 1.6; }
+
+/* Stairs */
+.stair-options { gap: 10px; padding: 12px 17px; background: #eeedf6; border-bottom: 1px solid #d8d1e9; }
+.stair-options label { display: flex; flex-direction: column; gap: 4px; font-size: 9px; color: #6f637e; }
+.stair-options select { font-size: 11px; color: var(--ink); background: var(--panel); border: 1px solid #cbd5bf; border-radius: 4px; padding: 6px 8px; max-width: 190px; }
+.stair-options > .quiet { font-size: 10px; color: #796887; margin-bottom: 2px; }
+.stair-options > span { flex-basis: 100%; font-size: 10px; color: #877493; }
+
+/* Chairs */
+.chair-options { gap: 12px; padding: 12px 17px; background: #f4edde; border-bottom: 1px solid #dfd0b8; }
+.chair-options label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; color: #79684e; }
+.chair-options select { padding: 6px; border: 1px solid #d8c8ac; border-radius: 4px; background: var(--panel); font-size: 11px; color: var(--ink); }
+.chair-options button { font-size: 10px; }
+.chair-options > span { flex-basis: 100%; font-size: 10px; color: #887154; line-height: 1.6; }
+
+/* Pixel values */
+.value-options { gap: 12px; padding: 13px 17px; background: #f0edf6; border-bottom: 1px solid #d8d1e9; font-size: 11px; }
+.value-instructions { flex-basis: 100%; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: #6f637e; }
+.value-instructions strong { color: #5d496d; }
+.value-options label { display: flex; flex-direction: column; gap: 5px; color: #6f637e; font-size: 10px; }
+.value-options input { width: 110px; border: 1px solid #c8bbd6; border-radius: 4px; background: #fff; padding: 8px; color: var(--ink); font: inherit; }
+.value-options button { font-size: 11px; padding: 8px 12px; }
+.value-options button:disabled { opacity: .45; cursor: default; }
+.value-options > #valueSelection { flex-basis: 100%; color: #796887; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .start-options { padding: 10px; }
+  .stair-options { padding: 10px; gap: 8px; }
+  .stair-options select { font-size: 10px; padding: 5px; max-width: 180px; }
+  .stair-options > span { font-size: 9px; }
+  .chair-options { padding: 10px; }
+  .value-options { padding: 10px; gap: 8px; }
+  .value-instructions { font-size: 10px; }
+}

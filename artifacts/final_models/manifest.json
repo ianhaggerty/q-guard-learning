@@ -1,0 +1,86 @@
+{
+  "m1_g1": {
+    "checkpoint": "m1_g1.pt",
+    "plan": "plans/1. Simple Corridor.json",
+    "guards": 1,
+    "training_config": "runs/P2_m1_gen/config.json"
+  },
+  "m2_g1": {
+    "checkpoint": "m2_g1.pt",
+    "plan": "plans/2. Simple Centre.json",
+    "guards": 1,
+    "training_config": "runs/P2_m2_gen/config.json"
+  },
+  "m2_g2": {
+    "checkpoint": "m2_g2.pt",
+    "plan": "plans/2. Simple Centre.json",
+    "guards": 2,
+    "training_config": "runs/E2_m2_demo/config.json"
+  },
+  "m3_g1": {
+    "checkpoint": "m3_g1.pt",
+    "plan": "plans/3. Two Chair Square.json",
+    "guards": 1,
+    "training_config": "runs/P2_m3_gen/config.json"
+  },
+  "m3_g2": {
+    "checkpoint": "m3_g2.pt",
+    "plan": "plans/3. Two Chair Square.json",
+    "guards": 2,
+    "training_config": "runs/D_m3_shared/config.json"
+  },
+  "m4_g1": {
+    "checkpoint": "m4_g1.pt",
+    "plan": "plans/4. Prison Block.json",
+    "guards": 1,
+    "training_config": "runs/P1_m4_scratch/config.json"
+  },
+  "m4_g2": {
+    "checkpoint": "m4_g2.pt",
+    "plan": "plans/4. Prison Block.json",
+    "guards": 2,
+    "training_config": "runs/E2_m4_demo/config.json"
+  },
+  "m5_g1": {
+    "checkpoint": "m5_g1.pt",
+    "plan": "plans/5. Awkward Museum.json",
+    "guards": 1,
+    "training_config": "runs/P3_m5_demo/config.json"
+  },
+  "m5_g2": {
+    "checkpoint": "m5_g2.pt",
+    "plan": "plans/5. Awkward Museum.json",
+    "guards": 2,
+    "training_config": "runs/E2_m5_demo/config.json"
+  },
+  "m6_g1": {
+    "checkpoint": "m6_g1.pt",
+    "plan": "plans/6. The Courtyard.json",
+    "guards": 1,
+    "training_config": "runs/P3_m6_demo/config.json"
+  },
+  "m6_g2": {
+    "checkpoint": "m6_g2.pt",
+    "plan": "plans/6. The Courtyard.json",
+    "guards": 2,
+    "training_config": "runs/E2_m6_demo/config.json"
+  },
+  "m7_g1": {
+    "checkpoint": "m7_g1.pt",
+    "plan": "plans/7. Alcatraz.json",
+    "guards": 1,
+    "training_config": "runs/P3_m7_demo/config.json"
+  },
+  "m7_g2": {
+    "checkpoint": "m7_g2.pt",
+    "plan": "plans/7. Alcatraz.json",
+    "guards": 2,
+    "training_config": "runs/E2_m7_demo/config.json"
+  },
+  "m7_g3": {
+    "checkpoint": "m7_g3.pt",
+    "plan": "plans/7. Alcatraz.json",
+    "guards": 3,
+    "training_config": "runs/E3_m7_demo/config.json"
+  }
+}

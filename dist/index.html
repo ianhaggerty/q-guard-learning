@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f3ec">
+  <title>Pixel Map Lab — Draw a world. Step inside.</title>
+  <meta name="description" content="Paint a pixel map, add walls, windows and automatic doors, then explore your creation. A browser-based map editor and game.">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/canvas.css">
+  <link rel="stylesheet" href="css/tool-options.css">
+  <link rel="stylesheet" href="css/explore.css">
+  <link rel="stylesheet" href="css/dialogs.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Pixel Map Lab home"><span class="brandmark"><i></i><i></i><i></i><i></i></span>pixel<span class="brand-light"> / map lab</span></a>
+  <div class="topnote"><span class="live-dot"></span>A little world, pixel by pixel.</div>
+  <div class="file-actions">
+    <button id="importBtn" class="quiet">↥ Import</button>
+    <button id="exportBtn" class="button outline">Export map <span>↗</span></button>
+  </div>
+</header>
+
+<main>
+  <section class="intro">
+    <div>
+      <div class="eyebrow">YOUR SPACE. YOUR RULES.</div>
+      <h1>Draw a world.<br class="mobile-break"> <em>Step inside.</em></h1>
+      <p>Build across floors. Paint a world, then take the stairs.</p>
+    </div>
+    <div class="mode-switch" role="group" aria-label="Editor mode">
+      <button id="buildMode" class="active" aria-pressed="true">✎ &nbsp; Build</button>
+      <button id="exploreMode" aria-pressed="false">▷ &nbsp; Explore</button>
+    </div>
+  </section>
+
+  <section class="workbench" aria-label="Pixel map editor">
+
+    <!-- Sidebar: materials, tools and canvas settings -->
+    <aside class="sidebar">
+      <div class="panel-title">01 <span>Materials</span><span class="keyhint">1—4</span></div>
+      <div id="materials" class="material-list">
+        <button class="material" data-material="0" aria-pressed="false"><span class="swatch floor"></span><span><strong>Floor</strong><small>Move + see through</small></span><kbd>1</kbd></button>
+        <button class="material selected" data-material="1" aria-pressed="true"><span class="swatch opaque"></span><span><strong>Opaque mass</strong><small>Blocks movement + sight</small></span><kbd>2</kbd></button>
+        <button class="material" data-material="2" aria-pressed="false"><span class="swatch transparent"></span><span><strong>Transparent mass</strong><small>See through, cannot pass</small></span><kbd>3</kbd></button>
+        <button class="material" data-material="3" aria-pressed="false"><span class="swatch door"><i></i></span><span><strong>Opaque door</strong><small>Opens when approached</small></span><kbd>4</kbd></button>
+      </div>
+      <div class="divider"></div>
+
+      <div class="panel-title">02 <span>Tools</span></div>
+      <div id="tools" class="tool-grid">
+        <button class="tool active" data-tool="brush" aria-pressed="true"><span>✎</span>Brush<kbd>B</kbd></button>
+        <button class="tool" data-tool="line" aria-pressed="false"><span>╱</span>Line<kbd>L</kbd></button>
+        <button class="tool" data-tool="rect" aria-pressed="false"><span>□</span>Rectangle<kbd>R</kbd></button>
+        <button class="tool" data-tool="fill" aria-pressed="false"><span>▧</span>Fill<kbd>F</kbd></button>
+        <button class="tool" data-tool="erase" aria-pressed="false"><span>⌫</span>Eraser<kbd>E</kbd></button>
+        <button class="tool" data-tool="starts" aria-pressed="false"><span>◎</span>Starts<kbd>S</kbd></button>
+        <button class="tool wide-tool stair-tool" data-tool="stairs" aria-pressed="false"><span>▱</span>Stairs<kbd>T</kbd></button>
+        <button class="tool wide-tool chair-tool" data-tool="chair" aria-pressed="false"><span>▤</span>Chair<kbd>C</kbd></button>
+        <button class="tool wide-tool value-tool" data-tool="value" aria-pressed="false"><span>▣</span>Set values<kbd>V</kbd></button>
+      </div>
+
+      <button id="settingsToggle" class="mobile-settings" aria-expanded="false">Brush &amp; canvas settings <span>⌄</span></button>
+      <div class="settings-panel">
+        <div class="brush-label"><label for="brushSize">Brush size</label><output id="brushValue">3 px</output></div>
+        <input id="brushSize" type="range" min="3" max="24" step="3" value="3" aria-label="Brush size">
+        <label class="check-row"><input id="filledRect" type="checkbox"> Filled rectangles</label>
+        <div class="divider"></div>
+
+        <div class="panel-title">03 <span>Canvas</span></div>
+        <label class="field-label" for="mapName">Map name</label>
+        <input id="mapName" class="text-input" maxlength="70" value="The courtyard">
+        <div class="dimensions">
+          <label>Width<input id="mapWidth" type="number" min="18" max="513" step="3" value="192"></label>
+          <span>×</span>
+          <label>Height<input id="mapHeight" type="number" min="18" max="513" step="3" value="129"></label>
+          <button id="newMap" class="mini-button" title="Create a blank map">New</button>
+        </div>
+        <div class="sidebar-bottom"><span class="save-dot"></span><span id="saveStatus">Saved on this device</span></div>
+      </div>
+    </aside>
+
+    <div class="canvas-column">
+
+      <!-- Above the canvas: map name, undo/redo, overlays and the floor bar -->
+      <div class="canvas-toolbar">
+        <div class="map-tab"><span class="tab-dot"></span><span id="mapTab">The courtyard · two floors</span><span class="pixel-badge">PIXEL MAP</span></div>
+        <div class="canvas-actions">
+          <button id="undo" class="icon-button" aria-label="Undo" title="Undo (Ctrl/Cmd Z)">↶</button>
+          <button id="redo" class="icon-button" aria-label="Redo" title="Redo (Ctrl/Cmd Shift Z)">↷</button>
+          <span class="toolbar-divider"></span>
+          <label class="grid-control"><input id="gridToggle" type="checkbox" checked> 3 px grid</label>
+          <label class="grid-control"><input id="valuesToggle" type="checkbox"> Values</label>
+        </div>
+      </div>
+      <div class="floor-bar">
+        <div class="floor-switch">
+          <label for="floorSelect">BUILDING FLOOR</label>
+          <select id="floorSelect" aria-label="Building floor"></select>
+          <button id="addFloor" class="floor-add" title="Add a blank building floor">+ Floor</button>
+        </div>
+        <div class="floor-switch">
+          <label for="exploreStart">EXPLORE FROM</label>
+          <select id="exploreStart" aria-label="Explore from numbered start"></select>
+        </div>
+        <span id="floorSummary">2 floors · 2 stairways</span>
+        <span id="floorLive" class="floor-live" role="status" aria-live="polite"></span>
+      </div>
+
+      <!-- Tool options: one strip per tool, shown while that tool is selected -->
+      <div id="startOptions" class="start-options" hidden>
+        <label>Numbered start<select id="startEdit" aria-label="Add or move numbered start"></select></label>
+        <button id="removeStart" class="quiet" disabled>Remove selected start</button>
+        <span id="startHint">Click clear floor to add numbered starts.</span>
+      </div>
+      <div id="stairOptions" class="stair-options" hidden>
+        <label>Stair type<select id="stairType"><option value="straight">Straight flight</option><option value="return">180° return + landing</option></select></label>
+        <label>Direction<select id="stairRotation"><option value="0">East →</option><option value="90">South ↓</option><option value="180">West ←</option><option value="270">North ↑</option></select></label>
+        <label>Connect to<select id="stairTarget"></select></label>
+        <button id="removeStair" class="quiet">Remove selected stair</button>
+        <span id="stairHint">9 px (3 blocks) flight width · 18 px half-floor run · 9 px return landing · 3 px transparent boundaries.</span>
+      </div>
+      <div id="chairOptions" class="chair-options" hidden>
+        <label>Chair faces<select id="chairRotation"><option value="0">East →</option><option value="90">South ↓</option><option value="180">West ←</option><option value="270">North ↑</option></select></label>
+        <button id="removeChair" class="quiet" disabled>Remove selected chair</button>
+        <span id="chairHint">Click a clear floor block to place a chair. Footprint: 0.50 × 0.50 m (3 × 3 px); seat height: 0.45 m. Compact-chair dimensions approximated to the grid. Eraser removes chairs.</span>
+      </div>
+      <div id="valueOptions" class="value-options" hidden>
+        <div class="value-instructions"><strong>Pixel values</strong><span>Drag a rectangle on the map, then apply a value. Selection snaps to 3 × 3 blocks.</span></div>
+        <label for="customValue">Custom value<input id="customValue" type="number" step="any" value="1" inputmode="decimal"></label>
+        <button id="applyValue" class="button outline" disabled>Apply value</button>
+        <button id="resetValue" class="quiet" disabled>Reset to defaults</button>
+        <span id="valueSelection" role="status" aria-live="polite">No selection. Floor defaults to 1; mass and doors default to 0.</span>
+      </div>
+
+      <!-- The map canvas and its overlays -->
+      <div id="viewport" class="viewport">
+        <canvas id="mapCanvas" tabindex="0" aria-label="Map canvas. In Build mode draw with the selected tool. In Explore mode move using arrow keys or WASD."></canvas>
+        <div id="canvasLabel" class="canvas-label"><span class="live-dot"></span><span id="modeLabel">BUILD MODE</span></div>
+        <div id="exploreHud" class="explore-hud" hidden>
+          <span id="hudEvents">◆ 0 active · ✓ 0 resolved</span>
+          <span id="hudFacing">E · Forward</span>
+          <span id="hudStart">Start 1</span>
+          <span id="hudFloor">Ground floor</span>
+          <span>◎ <b id="hudDistance">0.0</b> m traveled</span>
+          <span>▯ <b id="hudOpenDoors">0</b> doors open</span>
+          <span><b id="hudCalories">0.000</b> kcal</span>
+        </div>
+        <div id="brushCursor" class="brush-cursor" hidden></div>
+        <div id="touchPad" class="touch-pad" hidden>
+          <div><button data-direction="up-left" aria-label="Move northwest">↖</button><button data-direction="up" aria-label="Move north">↑</button><button data-direction="up-right" aria-label="Move northeast">↗</button></div>
+          <div><button data-direction="left" aria-label="Move west">←</button><span class="pad-center" aria-hidden="true">·</span><button data-direction="right" aria-label="Move east">→</button></div>
+          <div><button data-direction="down-left" aria-label="Move southwest">↙</button><button data-direction="down" aria-label="Move south">↓</button><button data-direction="down-right" aria-label="Move southeast">↘</button></div>
+        </div>
+      </div>
+
+      <div class="canvas-bottom">
+        <span id="coordinates">192 × 128 pixels</span>
+        <span id="modeHint">Drag to draw · Space + drag to pan</span>
+        <div class="zoom-group">
+          <button id="zoomOut" aria-label="Zoom out">−</button>
+          <button id="fitView">Fit</button>
+          <output id="zoomValue">100%</output>
+          <button id="zoomIn" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+
+      <!-- Explore mode panels -->
+      <div id="exploreOptions" class="explore-options" hidden>
+        <label class="check-row"><input id="sightToggle" type="checkbox" checked> Show detection probability</label>
+        <label class="detection-control">Half-probability distance <input id="detectionRange" type="number" min="0.1" step="0.5" value="10" aria-label="Detection half-probability distance in metres"> m</label>
+        <span class="detection-key">Brighter = higher detection · 1 s window · 90% maximum</span>
+        <span id="doorProximity">Doors: open within 5 px · close beyond 5 px</span>
+        <button id="restartGame" class="quiet">↻ Restart session</button>
+      </div>
+
+      <section id="eventPanel" class="event-panel" aria-label="Event simulation" hidden>
+        <div class="event-heading"><strong>Events</strong><span class="event-legend">◆ Amber pulse = active &nbsp; ✓ Green ring = spotted and resolved</span></div>
+        <div class="event-controls">
+          <label>Arrivals/min per value-1 pixel (× 10⁻⁶) <input id="eventRate" type="number" min="0" step="any" value="50" aria-label="Event arrivals per minute per value-1 pixel, in units of 10⁻⁶"></label>
+          <label class="check-row"><input id="eventObserver" type="checkbox" checked> Show active events (observer overlay)</label>
+        </div>
+        <div class="probability-summary">
+          <div><span>Σ PROBABILITIES · ALL PIXELS / ALL FLOORS</span><strong id="probabilitySum">0.000</strong><small>Expected pixels with at least one unresolved event</small></div>
+          <div><span>CURRENT FLOOR</span><strong id="probabilityHere">0.000</strong><small id="probabilityFloors">All floors start clear</small></div>
+        </div>
+        <div class="event-totals">
+          <span><b id="eventActive">0</b> active across all floors</span>
+          <span><b id="eventHere">0</b> on this floor</span>
+          <span><b id="eventResolved">0</b> resolved</span>
+          <span><b id="eventSpawned">0</b> spawned</span>
+          <span>Expected arrivals <b id="eventExpected">0</b>/min across all floors</span>
+        </div>
+        <p class="panel-note">Each pixel tracks m, its expected unresolved-event count, from an initially clear map: dm/dt = λ − μm, where λ = base rate × max(0, value) and μ = −ln(1 − one-second spotting probability). Its unresolved-event probability is P = 1 − exp(−m). The total above is ΣP over every pixel on every floor, including pixels out of sight. It is an expected number of occupied pixels, not a percentage or the probability that any event exists anywhere. Viewing history continuously lowers the modelled risk relative to leaving pixels unobserved. Actual spawning and resolution remain active; their random outcomes are displayed separately and do not reset the model expectation. Hover to inspect a pixel’s unresolved probability. Pause freezes both systems; restart resets both.</p>
+        <p id="eventRecent" class="event-recent" role="status">Waiting for the first event.</p>
+        <p class="panel-note">Each pixel spawns independently at rate = base rate × max(0, tile value). A value of 2 doubles the rate of a value of 1; zero and negative values spawn nothing. Positive custom values work on every material, including opaque mass. Events spawn on all floors, remain active until spotted, and may overlap. Detection is automatic and uses the character’s angle, distance and unobstructed line of sight on the current floor. Events on opaque pixels inherit the highest detection probability of a visible, edge-adjacent see-through neighbour. Walls still block sight beyond their surfaces. Amber markers are an observer overlay: seeing a marker as the user does not mean the character has spotted it. Turn the overlay off to see only resolution flashes. Pause and hidden tabs freeze spawning, detection and animations. Restart clears events and counters; events are session-only and do not change tile values or calorie rates.</p>
+      </section>
+
+      <section id="energyPanel" class="energy-panel" aria-label="Energy tracking" hidden>
+        <div class="energy-heading"><strong>Energy used</strong><span>70 kg person · 3 × 3 block = 0.5 m · Tile values do not affect energy</span></div>
+        <div class="energy-controls">
+          <label for="gaitSelect">Movement<select id="gaitSelect"><option value="walk">Walk · 3.8 MET · 3 mph</option><option value="run">Run · 9.3 MET · 6 mph</option><option value="sprint">Sprint proxy · 23 MET · 14 mph</option></select></label>
+          <label for="lookSelect">Look relative to travel<select id="lookSelect"><option value="forward">Forward · I</option><option value="forward-right">Forward-right · O</option><option value="right">Right · L</option><option value="back-right">Back-right · . · Walk only</option><option value="back">Back · , · Walk only</option><option value="back-left">Back-left · M · Walk only</option><option value="left">Left · J</option><option value="forward-left">Forward-left · U</option></select></label>
+          <span id="facingStatus" class="control-status">Facing E · 200° view</span>
+          <button id="sitToggle" class="button outline" aria-pressed="false">Sit down</button>
+          <span id="chairStatus" class="control-status" role="status">Approach the front of a chair to sit · E</span>
+          <button id="pauseEnergy" class="button outline" aria-pressed="false">Pause</button>
+        </div>
+        <div class="energy-totals">
+          <span><b id="totalCalories">0.000</b> kcal total</span>
+          <span id="energyActivity">Standing · 1.3 MET</span>
+          <span>Elapsed <b id="energyTime">00:00</b></span>
+          <span><b id="energyRate">1.52</b> kcal/min</span>
+        </div>
+        <div class="energy-table-wrap">
+          <table class="energy-table">
+            <thead><tr><th>Activity</th><th>MET</th><th>Speed m/s</th><th>Time</th><th>kcal used</th></tr></thead>
+            <tbody id="energyRows"></tbody>
+          </table>
+        </div>
+        <p class="panel-note">kcal = MET × 70 × seconds ÷ 3600, including resting energy. Sitting uses 1 MET; standing uses 1.3. Sit on a nearby chair to reduce energy use to 1 MET. Press E or use Sit down; move to stand up. Sitting reduces calorie use rather than restoring spent calories. The selected gait applies on stair flights and landings unless looking back, which forces backward walking. Stair speeds up/down: Walk 0.5/0.6 m/s, Run 1.0/1.0 m/s, Sprint 1.5/1.3 m/s. Speeds are simulation assumptions along the map. Return landings use level-ground speeds. * Faster forward stair MET estimates scale energy above standing with speed: sprint ascent is anchored to running ascent (15 MET); faster descent is anchored to walking descent (3.5 MET).</p>
+        <p class="panel-note">Facing uses N, NE, E, SE, S, SW, W or NW. Look in any of eight directions relative to travel with the keys around K (U I O / J L / M , .; F, Q, X and B also pick forward, left, right and back); it holds when stopped. Diagonal travel rotates facing and the view cone by 45°. Hold two movement keys together or use a diagonal arrow. A one-pixel step on both axes covers √2 pixels of distance and takes √2 times as long as a one-pixel cardinal step at the same gait. Looking back or diagonally back overrides Run/Sprint with backward walking: 0.8 m/s, estimated 4 MET (4.67 kcal/min at 70 kg). Backward stair ascent/descent: 0.25/0.30 m/s, estimated 6.8/3.5 MET. These are simulation assumptions, not measured rates at these speeds: the Compendium lists 6 MET for backward walking at 3.5 mph. Backward stairs use half the forward walking speed and retain its MET as a conservative estimate. A 200° horizontal view (±100°) fades linearly with eccentricity and decreases with distance. Brightness represents the probability of detecting a continuously present event within one second. Walls still occlude vision.</p>
+        <p class="panel-note">Detection model: P(1 s) = 0.90 × max(0, 1 − |angle|/100°) ÷ (1 + distance/half-distance). The default half-distance is 10 m; adjust it above. Range has no cutoff. At 10 m straight ahead, P is 45%; at 50° to either side it is 22.5%. Opaque barriers and closed doors block detection; transparent barriers permit it. For continuous exposure over t seconds at fixed conditions, P(t) = 1 − (1 − P(1 s))ᵗ. Hover over the map to inspect the local probability. The 90% maximum and distance curve are simulation assumptions, not calibrated human detection measurements. Active events use these probabilities automatically; spotting one resolves it immediately.</p>
+        <p class="panel-note">Session totals reset on restart or entering Explore again. Tracking pauses in hidden tabs and dialogs. Sprint is a high-speed running proxy, not a full anaerobic model. Sources: <a href="https://pacompendium.com/inactivity/" target="_blank" rel="noopener">rest</a> · <a href="https://pacompendium.com/walking/" target="_blank" rel="noopener">walking &amp; stairs</a> · <a href="https://pacompendium.com/running/" target="_blank" rel="noopener">running</a>.</p>
+      </section>
+    </div>
+  </section>
+
+  <section class="below">
+    <div class="presets"><button id="blankPreset" class="preset">Blank canvas <span>+</span></button></div>
+    <p class="footnote"><span>◎</span> Four materials. Connected floors.<br><small>Purple lines change levels. Landings use floor material.</small></p>
+  </section>
+</main>
+
+<footer>
+  <span>PIXEL / MAP LAB</span>
+  <span>Make something worth exploring.</span>
+  <button id="helpBtn">Controls &amp; file format <span>↗</span></button>
+</footer>
+
+<input id="importFile" type="file" accept=".json,.png,application/json,image/png" hidden>
+
+<dialog id="exportDialog">
+  <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
+  <div class="eyebrow">TAKE YOUR WORLD WITH YOU</div>
+  <h2>Export your map</h2>
+  <p>JSON keeps the whole building. JSON includes custom pixel values. PNG is a material image of the selected floor.</p>
+  <button id="downloadJSON" class="export-choice"><strong>Map file <span>.json ↗</span></strong><small>Every floor, stair link, pixel value and numbered start position. Full building.</small></button>
+  <button id="downloadPNG" class="export-choice"><strong>Pixel image <span>.png ↗</span></strong><small>Current floor only. Four material colors; chairs, values and stair links need JSON.</small></button>
+  <p class="dialog-note">Your map also saves automatically on this device. Older maps and imports align to 3 × 3 cells on load; canvas edges round up to a multiple of 3.</p>
+</dialog>
+
+<dialog id="helpDialog">
+  <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
+  <div class="eyebrow">A QUICK FIELD GUIDE</div>
+  <h2>Build. Then explore.</h2>
+  <dl>
+    <dt>Painting</dt>
+    <dd>All materials snap to a 3 × 3 pixel grid. Brush sizes increase in steps of 3 pixels. Drag with Brush or Eraser. Erasing any part of a stair, including its transparent boundary, removes the whole linked stair on both floors; one undo restores the stroke. Line and Rectangle use a start and end point. Fill changes a connected region. Starts (S) places numbered starts 1, 2, 3 and so on. Click clear floor to add the next start; click a marker or select its number to move it. Remove selected start deletes it and renumbers the following starts; keep at least one. New starts snap to 3 × 3 block centres. Choose Explore from above the map to select the current character’s starting position and floor. This selects one character, rather than running multiple people simultaneously. Numbered starts are saved in JSON and undo/redo; old maps load their original start as Start 1.</dd>
+    <dt>Building floors &amp; stairs</dt>
+    <dd>Choose a building floor above the canvas. Use + Floor to add a level. Select Stairs (T), choose a straight flight or a 180° return, pick its direction and connected floor, then click the map. Both halves are created together with 3-pixel transparent boundaries and, for return stairs, a matching divider. You can paint materials around or across the stairs yourself. Click an existing stair to select it; Remove selected stair clears its footprint to floor.</dd>
+    <dt>Halfway crossings</dt>
+    <dd>Purple lines switch floors instantly when crossed. Straight stairs switch in the middle of the flight. Both stair types have 9-pixel-wide flights (3 blocks) and 18-pixel runs per half-floor rise. The return stairway is 21 pixels wide: two 9-pixel flights plus a 3-pixel divider. Return stairs switch across a 9-pixel plain floor-material landing between the opposing flights; the landing adds no height. Walking back reverses the transition. Only the current floor is visible.</dd>
+    <dt>Chairs</dt>
+    <dd>Choose Chair (C), set its facing direction, then click a clear floor block. A chair occupies one 3 × 3 block (0.50 × 0.50 m), an approximation of compact dining-chair dimensions at this grid resolution, with a 0.45 m seat height. It blocks movement but allows sight. Click a chair to select it; change its facing direction, remove it, or erase it. Painting mass or doors over its footprint removes it. In Explore, approach its front and press E or use Sit down. Standing exits at the front; movement also stands you up. Sitting uses 1 MET, and does not replenish calories. Sit/stand transitions are instantaneous and add no extra energy or walking distance. Chair objects and their facing directions are saved in JSON; PNG exports materials only. <a href="https://www.ikea.com/ie/en/p/nordviken-chair-white-00369111/" target="_blank" rel="noopener">Example real chair dimensions</a>.</dd>
+    <dt>Energy tracking</dt>
+    <dd>Explore tracks calories for a 70 kg person at a scale of 0.5 metres per 3 × 3 block. Select Walk, Run or Sprint; approach a chair and use Sit down and Stand up for posture. Movement stands you up automatically. Stairs use gait-specific ascent/descent speeds and energy rates; their plain landing counts as level movement. Stair speeds (up/down, m/s): walk 0.5/0.6, run 1.0/1.0, sprint 1.5/1.3. Estimated METs are marked with an asterisk in the energy table. Pause freezes both movement and calories. Hidden tabs and open dialogs pause tracking. Restart session clears the totals. Tile values stay separate from the calorie model.</dd>
+    <dt>Pixel values</dt>
+    <dd>Floor defaults to 1; opaque mass, transparent mass and doors default to 0. Choose Set values (V), drag a rectangle, enter a number, then Apply value. Values are independent of materials and stay when repainting. Reset to defaults removes custom values in the selection. Toggle Values to show numbers; hover to read an exact pixel value. Selections affect the current floor only. JSON saves values; PNG saves materials only.</dd>
+    <dt>Navigation</dt>
+    <dd>Scroll to zoom. Space + drag, middle mouse, or the right mouse button pans. Fit recenters the map.</dd>
+    <dt>Exploring</dt>
+    <dd>Move with WASD, arrow keys or the on-screen arrows. Look in any of eight directions relative to travel: the keys around K map to them (U forward-left, I forward, O forward-right, J left, L right, M back-left, comma back, period back-right), and F, Q, X and B still pick forward, left, right and back. Facing uses eight directions and stays when stopped. Hold two movement keys together or use a diagonal arrow; diagonal travel covers √2 times the distance for the same change on each axis. Looking back or diagonally back forces backward walking even when Run or Sprint is selected. The directional view spans 200° (100° either side of facing), with brightness indicating detection probability. Doors disappear within 5 pixels and close immediately beyond the same 5-pixel distance. Opaque walls block sight; transparent barriers do not.</dd>
+    <dt>Door pixels</dt>
+    <dd>Connected door pixels act as one doorway. Separate doors with floor or wall pixels. Paint openings at least 3 pixels wide for the explorer.</dd>
+    <dt>Files</dt>
+    <dd>Import JSON or a palette PNG. JSON preserves all floors and stairs; older single-floor files still import. PNG exports only the current floor and cannot preserve stair links. JSON pixel values: 0 floor, 1 opaque mass, 2 transparent mass, 3 opaque door. PNG import also understands the original white/dark/cyan maps; other colors require confirmation before conversion.</dd>
+    <dt>Shortcuts</dt>
+    <dd>1–4 materials · B brush · L line · R rectangle · F fill · E eraser · S start · T stairs · V set values · C chair · E sit/stand in Explore · U I O J L M , . look in Explore · Ctrl/Cmd Z undo · Ctrl/Cmd Shift Z redo.</dd>
+  </dl>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/ui/main.js"></script>
+</body>
+</html>

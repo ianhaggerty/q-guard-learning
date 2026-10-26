@@ -1,0 +1,26 @@
+/* Export and Help dialogs, and the toast. */
+
+dialog { color: var(--ink); background: var(--panel); border: 1px solid #cbd3be; border-radius: 12px; box-shadow: 0 25px 100px #152d3140; width: min(520px, 92vw); padding: 33px; max-height: 85vh; }
+dialog::backdrop { background: #263d364d; backdrop-filter: blur(4px); }
+dialog h2 { font-family: 'Space Grotesk', sans-serif; font-size: 29px; letter-spacing: -1px; font-weight: 500; margin: 12px 0; }
+dialog p { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.dialog-close { position: absolute; right: 15px; top: 12px; font-size: 24px; color: #8a967d; }
+.dialog-note { font-size: 10px !important; }
+
+.export-choice { display: block; width: 100%; text-align: left; padding: 18px; border: 1px solid #d6deca; border-radius: 6px; background: #f4f7ec; margin: 12px 0; }
+.export-choice:hover { background: #e8efda; }
+.export-choice strong { display: flex; justify-content: space-between; font-weight: 500; font-size: 14px; }
+.export-choice strong span { color: #83936d; }
+.export-choice small { display: block; font-size: 11px; line-height: 1.6; color: var(--muted); margin-top: 8px; }
+
+dl { font-size: 12px; line-height: 1.7; }
+dt { font-weight: 600; margin-top: 15px; }
+dd { margin: 4px 0 0; color: var(--muted); }
+
+.toast { position: fixed; left: 50%; bottom: 25px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: #fffefa; font-size: 12px; line-height: 1.5; padding: 13px 20px; border-radius: 6px; box-shadow: 0 8px 40px #263d3630; max-width: 90vw; z-index: 100; transition: .2s; }
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 760px) {
+  dialog { padding: 27px; }
+  dialog h2 { font-size: 26px; }
+}

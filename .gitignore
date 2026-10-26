@@ -1,0 +1,33 @@
+# macOS metadata
+.DS_Store
+
+# Dependencies and local environments
+node_modules/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Python and notebook caches
+__pycache__/
+*.py[cod]
+*.nbc
+*.nbi
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Rebuilt line-of-sight cache and console logs
+/artifacts/cache/
+/artifacts/logs/
+*.log
+
+# Research reports and generated experiment artifacts
+/artifacts/report/
+/artifacts/results/
+/artifacts/figures/
+/artifacts/runs/**/log.json
+/artifacts/validation/validation_results.json
+
+# New training checkpoints stay local; curated models remain versionable
+/artifacts/runs/**/*.pt

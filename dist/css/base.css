@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* Design tokens, element defaults and small shared pieces. */
+
+:root {
+  --paper: #f5f3ec;
+  --panel: #fffefa;
+  --ink: #263d36;
+  --muted: #7d877e;
+  --line: #dedfd3;
+  --sage: #e5e9d9;
+  --mint: #78c6c0;
+  --amber: #dda457;
+  --accent: #e6ef89;
+  --shadow: 0 8px 35px #263d3608;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; }
+button, a, input { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; color: inherit; border: 0; background: none; }
+button:disabled { opacity: .3; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible, canvas:focus-visible {
+  outline: 3px solid #6ba799;
+  outline-offset: 3px;
+}
+input[type=range] { width: 100%; accent-color: var(--ink); height: 4px; margin: 14px 0 12px; }
+input[type=checkbox] { accent-color: var(--ink); width: 12px; height: 12px; margin: 0; }
+
+/* Buttons */
+.button { border-radius: 6px; padding: 12px 17px; font-size: 13px; font-weight: 550; display: flex; gap: 26px; align-items: center; }
+.button:hover { background: var(--sage); }
+.outline { border: 1px solid #bcc3b5; background: #fffefa80; }
+.quiet { padding: 7px 2px; font-size: 13px; }
+.quiet:hover { color: #628772; }
+
+/* Shared bits */
+.eyebrow { font-size: 10px; font-weight: 650; letter-spacing: 1.7px; color: #7b8775; }
+.live-dot { width: 6px; height: 6px; background: #79926a; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.divider { height: 1px; background: #e4e6dc; margin: 18px 0; }
+.check-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: #7f8979; }
+
+@media (max-width: 760px) {
+  .button { padding: 9px 10px; font-size: 11px; gap: 10px; }
+  .eyebrow { font-size: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

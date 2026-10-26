@@ -1,0 +1,67 @@
+/* Explore-mode panels below the canvas: view options, events and energy. */
+
+.panel-note { font-size: 10px; color: var(--muted); line-height: 1.7; margin: 6px 0; }
+.panel-note a { color: #665481; }
+.control-status { font-size: 10px; color: #6f637e; align-self: center; }
+
+/* View options */
+.explore-options { padding: 12px 17px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: #f7f9ef; font-size: 10px; }
+.explore-options label { display: flex; gap: 5px; align-items: center; }
+.explore-options .check-row { color: #526246; }
+.explore-options input[type=number] { width: 42px; font-size: 10px; padding: 4px; border: 1px solid var(--line); border-radius: 3px; background: #fff; color: var(--ink); }
+.explore-options .quiet { font-size: 10px; }
+.detection-control { font-size: 10px; color: var(--muted); }
+.detection-key { font-size: 9px; color: var(--muted); }
+
+/* Events */
+.event-panel { padding: 16px 17px; background: #fff7e9; border-top: 1px solid #e4d6bc; }
+.event-heading, .event-controls, .event-totals { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.event-heading strong { font-size: 14px; }
+.event-legend { font-size: 11px; color: #88643b; }
+.event-controls { margin: 12px 0; font-size: 10px; color: #756648; }
+.event-controls label { display: flex; gap: 8px; align-items: center; }
+.event-controls input[type=number] { width: 90px; padding: 6px; border: 1px solid #d8c5a4; border-radius: 4px; background: #fffefa; color: var(--ink); }
+.event-totals { font-size: 11px; padding: 12px; border-radius: 5px; background: #f0e6cf; gap: 14px; }
+.event-totals b { font-variant-numeric: tabular-nums; }
+.event-recent { font-size: 10px; line-height: 1.6; color: #437c65; min-height: 16px; }
+
+.probability-summary { display: flex; gap: 28px; flex-wrap: wrap; margin: 12px 0; padding: 16px; border: 1px solid #d7caa8; border-radius: 6px; background: #fffdf4; }
+.probability-summary > div { display: flex; flex-direction: column; gap: 5px; min-width: 210px; }
+.probability-summary span { font-size: 9px; letter-spacing: 1px; color: #8c7651; }
+.probability-summary strong { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; color: #67532f; }
+.probability-summary small { font-size: 10px; color: #857558; line-height: 1.5; }
+
+/* Energy */
+.energy-panel { padding: 17px; background: #f6f8ef; border-top: 1px solid var(--line); }
+.energy-heading { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.energy-heading strong { font-size: 14px; }
+.energy-heading span { font-size: 10px; color: var(--muted); line-height: 1.7; }
+.energy-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.energy-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; color: var(--muted); }
+.energy-controls select { font: inherit; color: var(--ink); border: 1px solid #cbd5bf; background: var(--panel); padding: 8px; border-radius: 4px; }
+.energy-controls button { font-size: 11px; padding: 8px 12px; }
+.energy-controls #sitToggle:disabled { opacity: .45; cursor: default; }
+.energy-totals { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 13px; background: #e7edd9; border-radius: 5px; font-size: 11px; color: #526246; }
+.energy-totals > span:first-child { font-size: 15px; color: var(--ink); }
+.energy-totals b { font-variant-numeric: tabular-nums; }
+.energy-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; font-variant-numeric: tabular-nums; }
+.energy-table th, .energy-table td { text-align: right; padding: 7px 10px; border-bottom: 1px solid #dce2d0; }
+.energy-table th:first-child { text-align: left; font-weight: 500; }
+.energy-table thead th { color: var(--muted); font-weight: 500; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .panel-note, .energy-heading span { font-size: 9px; }
+  .control-status { flex-basis: 100%; font-size: 9px; }
+  .explore-options { padding: 10px 12px; }
+  .explore-options .quiet { font-size: 9px; }
+  .event-panel { padding: 12px; }
+  .event-legend { font-size: 9px; }
+  .event-totals { gap: 9px; }
+  .probability-summary { gap: 15px; padding: 12px; }
+  .probability-summary strong { font-size: 25px; }
+  .energy-panel { padding: 12px; }
+  .energy-controls { gap: 7px; }
+  .energy-controls button { padding: 8px; }
+  .energy-totals { gap: 10px; }
+  .energy-table th, .energy-table td { padding: 7px 4px; }
+}
