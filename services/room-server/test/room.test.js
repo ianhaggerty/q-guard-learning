@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadPlans } from '../src/plans.js';
-import { Room, TICK_SECONDS, parseInput } from '../src/room.js';
+import { Room, TICK_SECONDS, parseInput, summarise } from '../src/room.js';
 
 const plans = loadPlans();
 const plan = id => plans.find(p => p.id === id);
@@ -174,6 +174,31 @@ test('an agent whose player has left keeps its place; the player returns to the 
   room.detachMember(player);
   assert.deepEqual([room.humans, room.agents, room.members.size], [1, 1, 2]);
   assert.deepEqual(room.present, [other]);
+  assert.equal(room.agentRequest().owners[0], 'a');
   assert.equal(room.addMember(player), explorer);
   assert.equal(room.humans, 2);
+});
+
+test('summarising a player\'s 0.5 s: the usual direction, gait and facing, or 9 for sitting down', () => {
+  assert.deepEqual(summarise([[1, 0, 0, false], [1, 1, 0, false], [3, 1, 2, false], [1, 1, 2, false], [1, 1, 2, false]], false), [1, 1, 2]);
+  assert.deepEqual(summarise([[0, 0, 4, false], [0, 0, 4, true], [0, 0, 4, true]], false), [9, 0, 4]);
+  assert.deepEqual(summarise([[0, 0, 4, true], [0, 0, 4, true]], true), [0, 0, 4], 'staying seated is standing still');
+});
+
+test('teaching records one demonstration per decision interval from the start of each interval', () => {
+  const room = new Room('r1', plan('2')), player = session('a');
+  const explorer = room.addMember(player);
+  room.setTuning(player, true);
+  assert.deepEqual(room.takeLessons(), [], 'the first boundary only starts a lesson');
+  const start = { x: explorer.position.x, y: explorer.position.y };
+  room.setInput(player, { dx: 0, dy: 1, gait: 'sprint', look: 'forward' });
+  for (let tick = 0; tick < 10; tick++) room.step();
+  const [{ session: who, demo }] = room.takeLessons();
+  assert.equal(who, player);
+  assert.deepEqual(demo.action, [3, 2, 2]); // south, sprinting, facing south
+  assert.equal(demo.agent, 0);
+  assert.deepEqual([demo.explorers[0].x, demo.explorers[0].y], [start.x, start.y]);
+  room.setAutopilot(player, true);
+  for (let tick = 0; tick < 10; tick++) room.step();
+  assert.deepEqual(room.takeLessons(), [], 'nothing is learned while the agent drives');
 });
