@@ -15,10 +15,10 @@ Commands below run from `guard_qlearning`.
 | `scripts_extra/run_all.sh` | Training recipes and their initialization dependencies. |
 | `guardrl/` | Simulator, environment, observations, models, training, inference, and visualization code. |
 | `analysis/eval_runs.py`, `analysis/eval_tabular.py` | Run neural and tabular policies; generate new local evaluation output. |
-| `plans/` | Seven hand-made maps, also available in the app's `../dist/plans/`. |
+| `plans/` | Seven hand-made maps, also available in the app's `../apps/web/plans/`. |
 | `plans_curriculum/` | 31 curriculum maps and their index. |
 | `maps/` | Curriculum map generator and JavaScript map builder. |
-| `validation/`, `js_core/` | Simulator cross-check tools and reference JavaScript core. |
+| `validation/` | Simulator cross-check tools; they run the app's JavaScript core in `../packages/core/src/` (override with `CORE_DIR`). |
 
 ## Setup
 
@@ -27,7 +27,12 @@ pip install numpy numba torch matplotlib pillow
 ```
 
 Node.js is required for map generation and JavaScript cross-checks.
-The line-of-sight cache in `cache/` is rebuilt automatically.
+The line-of-sight cache in `cache/` is rebuilt automatically; set `GUARDRL_CACHE_DIR`
+to keep it elsewhere.
+
+`guardrl` is also an installable package (`pip install ./artifacts` from the repository
+root, add `[viz]` for the figure code); the agent-inference and trainer services install it
+this way.
 
 ## Run a saved model
 

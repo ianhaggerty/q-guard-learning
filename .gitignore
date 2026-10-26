@@ -31,3 +31,10 @@ __pycache__/
 
 # New training checkpoints stay local; curated models remain versionable
 /artifacts/runs/**/*.pt
+
+# Web build output
+/apps/web/build/
+
+# Python package build output
+/artifacts/build/
+*.egg-info/

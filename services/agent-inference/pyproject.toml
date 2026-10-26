@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pml-agent-inference"
+version = "0.1.0"
+description = "Serves guard-agent actions to room servers"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["guardrl"]
+
+[tool.setuptools]
+packages = ["agent_inference"]

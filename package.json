@@ -5,8 +5,18 @@
   "license": "MIT",
   "description": "Raster map editor and exploration game",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/core",
+    "apps/web",
+    "services/api",
+    "services/room-server"
+  ],
   "scripts": {
-    "test": "node --test tests/*.test.js",
-    "start": "node scripts/serve.js"
+    "test": "npm test --workspaces --if-present",
+    "start": "node scripts/serve.js",
+    "build:web": "npm run build -w apps/web"
   }
 }

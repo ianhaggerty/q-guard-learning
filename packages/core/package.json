@@ -1,0 +1,15 @@
+{
+  "name": "@pixel-map-lab/core",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Simulation core shared by the browser client and the game servers",
+  "type": "module",
+  "exports": "./src/index.js",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

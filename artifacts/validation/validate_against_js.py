@@ -10,7 +10,7 @@ from guardrl.plan import load_plan, plan_paths
 from guardrl.env import GuardEnv
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.environ.get('CORE_DIR', os.path.join(ROOT, 'js_core'))
+CORE = os.environ.get('CORE_DIR', os.path.join(os.path.dirname(ROOT), 'packages', 'core', 'src'))
 RUNTIME = shutil.which('node') or shutil.which('bun')
 
 

@@ -1,6 +1,6 @@
 """Loading Pixel-Map-Lab floor plans into flat numpy arrays for the numba simulator.
 
-Everything here mirrors dist/js/core/*.js:
+Everything here mirrors packages/core/src/*.js:
   * materials: 0 floor, 1 opaque, 2 transparent, 3 opaque door           (materials.js)
   * per-pixel values (event weights), defaulting to 1 on floor, else 0   (values.js)
   * doors = 4-connected groups of door pixels                             (doors.js)
@@ -40,7 +40,8 @@ FIELD_OF_VIEW = 200.0
 FLOOR, OPAQUE, TRANSPARENT, DOOR = 0, 1, 2, 3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR = os.path.join(os.path.dirname(HERE), 'cache')
+# Overridable so containers can keep the cache on a volume instead of beside the package.
+CACHE_DIR = os.environ.get('GUARDRL_CACHE_DIR') or os.path.join(os.path.dirname(HERE), 'cache')
 
 
 @dataclass

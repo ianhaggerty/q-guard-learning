@@ -1,0 +1,53 @@
+# Template for one fine-tuning job. Phase 4's job controller creates these from the queue
+# (with Kueue enforcing per-user quotas); until then it can be submitted by hand:
+#   kubectl create -n pml -f deploy/k8s/jobs/trainer-job.yaml
+# The simulator dominates training time, so the job asks for CPU, not a GPU. It runs on the
+# spot batch pool; train.py saves model.pt at every evaluation, which bounds the work lost when
+# a node is reclaimed. The trainer sizes torch and numba threads from CPU_LIMIT.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: trainer-
+  labels:
+    app.kubernetes.io/name: trainer
+    app.kubernetes.io/part-of: pixel-map-lab
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trainer
+    spec:
+      restartPolicy: Never
+      nodeSelector: { pixel-map-lab/pool: batch }
+      tolerations:
+        - { key: pixel-map-lab/pool, operator: Equal, value: batch, effect: NoSchedule }
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: trainer
+          image: pml/trainer
+          args: ["--set", "plan=/plans/plan.json", "out=/work/run"]
+          env:
+            - name: CPU_LIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.cpu, divisor: "1" }
+          resources:
+            requests: { cpu: "8", memory: 6Gi }
+            limits: { cpu: "8", memory: 8Gi }
+          volumeMounts:
+            - { name: plans, mountPath: /plans, readOnly: true }
+            - { name: work, mountPath: /work }
+            - { name: sight-cache, mountPath: /var/cache/guardrl }
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        # Phase 4 replaces these with the job's plan, demonstrations and base checkpoint from
+        # object storage, and uploads /work/run when the job ends.
+        - name: plans
+          configMap: { name: trainer-plan }
+        - name: work
+          emptyDir: {}
+        - name: sight-cache
+          emptyDir: {}

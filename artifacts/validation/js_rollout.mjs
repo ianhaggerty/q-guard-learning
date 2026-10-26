@@ -1,4 +1,4 @@
-// Replays an action sequence in the original JS core (dist/js/core) and dumps the trajectory.
+// Replays an action sequence in the JS core (packages/core/src) and dumps the trajectory.
 // usage: bun validation/js_rollout.mjs <coreDir> <plan.json> <actions.json> <out.json>
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
