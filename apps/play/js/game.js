@@ -1,7 +1,8 @@
 // Being in a room: keys become input messages, snapshots are buffered and drawn every
 // animation frame a little in the past, and the side panel shows the score and roster.
-// The player can hand their explorer to the autopilot (a pretrained guard agent; keys are
-// then ignored until they take it back) and can turn on the heatmap cheat.
+// The player can hand their explorer to their agent (keys are then ignored until they take
+// it back), teach that agent from their own play while they drive, and turn on the heatmap
+// cheat.
 //
 // Score is each explorer's credit: the expected number of events its looking resolved,
 // the same quantity the guard agents are trained to maximise (minus energy).
@@ -30,6 +31,7 @@ export class Game {
     this.snapshots = new SnapshotBuffer();
     this.intent = new Intent();
     this.autopilot = joined.you.autopilot;
+    this.taught = joined.you.agent;
     this.frame = 0;
     elements.title.textContent = joined.room.planName;
     elements.code.textContent = joined.room.id;
@@ -55,6 +57,18 @@ export class Game {
 
     elements.autopilot.hidden = !autopilot;
     elements.autopilotNote.hidden = autopilot;
+    elements.agentPanel.hidden = !autopilot;
+    elements.agentMap.textContent = `on ${joined.room.planName}`;
+    elements.tuning.checked = joined.you.tuning;
+    elements.tuning.onchange = () => {
+      connection.send({ type: 'tuning', on: elements.tuning.checked });
+      this.showAgent();
+      elements.canvas.focus();
+    };
+    elements.resetAgent.onclick = () => {
+      connection.send({ type: 'resetAgent' });
+      elements.canvas.focus();
+    };
     this.showAutopilot();
     elements.autopilot.onclick = () => {
       this.autopilot = !this.autopilot;
@@ -89,12 +103,30 @@ export class Game {
     if (this.elements.heatmap.checked) this.view.setHeat(message);
   }
 
+  onTuning(status) {
+    this.taught = status;
+    this.showAgent();
+  }
+
   showAutopilot() {
-    const { autopilot, leave } = this.elements;
-    autopilot.textContent = this.autopilot ? 'Take back control' : 'Let the agent drive';
+    const { autopilot, leave, tuning } = this.elements;
+    autopilot.textContent = this.autopilot ? 'Take back control' : 'Let your agent drive';
     autopilot.setAttribute('aria-pressed', this.autopilot);
     autopilot.classList.toggle('outline', !this.autopilot);
     leave.textContent = this.autopilot ? 'Leave, agent stays' : 'Leave';
+    // Teaching happens only while the player drives.
+    tuning.disabled = this.autopilot;
+    tuning.parentElement.title = this.autopilot ? 'Take back control to teach your agent' : '';
+    this.showAgent();
+  }
+
+  /** Say which agent drives for this player and how far it has been taught. */
+  showAgent() {
+    const { demos, updates } = this.taught;
+    const learning = this.elements.tuning.checked && !this.autopilot;
+    this.elements.agentStatus.textContent = demos
+      ? `Fine-tuned on ${demos} moment${demos === 1 ? '' : 's'} of your play (${updates} training steps)${learning ? ' · learning now' : ''}.`
+      : learning ? 'Learning from your play…' : 'Pretrained: teach it by playing with fine-tuning on.';
   }
 
   loop(now) {

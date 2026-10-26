@@ -58,6 +58,13 @@
         <label class="toggle"><input type="checkbox" id="heatmapToggle"> Show heatmap <span class="cheat">cheat</span></label>
       </div>
       <p id="autopilotNote" class="note" hidden>The autopilot is not available on this server.</p>
+      <section id="agentPanel" class="agent-panel">
+        <div class="panel-title">Your agent <span id="agentMap"></span></div>
+        <p id="agentStatus" class="agent-status"></p>
+        <label class="toggle"><input type="checkbox" id="tuningToggle"> Fine-tune while I play</label>
+        <label class="blend">Copies me <input type="range" id="blendSlider" min="0" max="100" value="50" aria-label="How closely your agent copies your play"> <output id="blendValue">50%</output></label>
+        <button id="resetAgent" class="quiet">Reset to the pretrained agent</button>
+      </section>
       <dl class="hud">
         <div><dt>Your score</dt><dd id="hudScore">0.0</dd></div>
         <div><dt>Team score</dt><dd id="hudTeam">0.0</dd></div>
@@ -68,7 +75,7 @@
       </dl>
       <div class="panel-title">Explorers</div>
       <ol id="roster" class="roster"></ol>
-      <p class="note">Score is the expected number of events your looking resolves (× 1000), shared fairly when several people watch the same spot. The agent drives with a model trained on this map; it spends energy only when it pays, so it may stand still while little is unseen. If you leave while it drives, it keeps playing until you come back or close the tab. The heatmap shows where unspotted events are likely to be.</p>
+      <p class="note">Score is the expected number of events your looking resolves (× 1000), shared fairly when several people watch the same spot. Your agent starts as a model trained on this map; it spends energy only when it pays, so it may stand still while little is unseen. Fine-tuning teaches it from your play while you drive; "copies me" sets how closely it follows you rather than its training. If you leave while it drives, it keeps playing until you come back or close the tab. The heatmap shows where unspotted events are likely to be.</p>
       <p class="keys"><kbd>WASD</kbd> move · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> walk / run / sprint · <kbd>U I O J L M , .</kbd> look · <kbd>E</kbd> sit</p>
     </aside>
   </section>
