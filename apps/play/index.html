@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f3ec">
+  <title>Pixel Map Lab — Play together</title>
+  <meta name="description" content="Patrol a Pixel Map Lab floor plan together with other people, live.">
+  <link rel="stylesheet" href="css/play.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Pixel Map Lab play home"><span class="brandmark"><i></i><i></i><i></i><i></i></span>pixel<span class="brand-light"> / play</span></a>
+  <div class="session"><span class="live-dot"></span><span id="sessionName">Connecting…</span></div>
+  <a class="button outline" href="../">✎ Build maps</a>
+</header>
+
+<main>
+  <section id="lobby" class="lobby" aria-label="Lobby">
+    <div class="intro">
+      <div class="eyebrow">PATROL TOGETHER</div>
+      <h1>Pick a map.<br><em>Share the watch.</em></h1>
+      <p>Start a room from one of the seven plans, or join one that is already running. Rooms close when the last person leaves.</p>
+    </div>
+    <div class="columns">
+      <section class="panel">
+        <div class="panel-title">01 <span>Start a room</span></div>
+        <ol id="planList" class="list"></ol>
+      </section>
+      <section class="panel">
+        <div class="panel-title">02 <span>Live rooms</span></div>
+        <ul id="roomList" class="list"></ul>
+        <p id="noRooms" class="empty">No rooms are running. Start one and share the room code.</p>
+      </section>
+    </div>
+  </section>
+
+  <section id="room" class="room" aria-label="Room" hidden>
+    <div class="stage">
+      <canvas id="roomCanvas" tabindex="0" aria-label="The map, with every explorer on your floor"></canvas>
+      <div id="floorLabel" class="floor-label"></div>
+    </div>
+    <aside class="panel side">
+      <div class="room-head">
+        <div>
+          <strong id="roomTitle"></strong>
+          <small>Room <span id="roomCode"></span> · <span id="hudTime">0:00</span></small>
+        </div>
+        <button id="leaveRoom" class="button outline">Leave</button>
+      </div>
+      <dl class="hud">
+        <div><dt>Your score</dt><dd id="hudScore">0.0</dd></div>
+        <div><dt>Team score</dt><dd id="hudTeam">0.0</dd></div>
+        <div><dt>Expected unspotted</dt><dd id="hudUnspotted">0.000</dd></div>
+        <div><dt>Events spotted</dt><dd id="hudSpotted">0</dd></div>
+        <div><dt>Energy (kcal)</dt><dd id="hudKcal">0.0</dd></div>
+        <div><dt>You are</dt><dd id="hudPose" class="pose">Walking</dd></div>
+      </dl>
+      <div class="panel-title">Explorers</div>
+      <ol id="roster" class="roster"></ol>
+      <p class="note">Score is the expected number of events your looking resolves (× 1000), shared fairly when several people watch the same spot.</p>
+      <p class="keys"><kbd>WASD</kbd> move · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> walk / run / sprint · <kbd>U I O J L M , .</kbd> look · <kbd>E</kbd> sit</p>
+    </aside>
+  </section>
+
+  <div id="disconnected" class="banner" role="alert" hidden>
+    <span>Disconnected. This session has ended.</span>
+    <button id="reconnect" class="button">Start a new session</button>
+  </div>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- The simulation core lives in packages/core; the dev server and the build both serve it at js/core/. -->
+<script type="importmap">{ "imports": { "@pixel-map-lab/core": "./js/core/index.js" } }</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
