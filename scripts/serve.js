@@ -4,7 +4,7 @@
 // accepts only a handful of pending connections and resets the rest, which can leave
 // the page half-loaded; Node's server does not have that limit.
 //
-// The page is dist/, except js/core/, which is served from packages/core/src/ so the
+// The page is apps/web/, except js/core/, which is served from packages/core/src/ so the
 // browser runs the same core as the tests and the game servers.
 
 import { createServer } from 'node:http';
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 /** URL prefixes and the folders they map to; the first matching prefix wins. */
 const MOUNTS = [
   ['/js/core/', fileURLToPath(new URL('../packages/core/src/', import.meta.url))],
-  ['/', fileURLToPath(new URL('../dist/', import.meta.url))],
+  ['/', fileURLToPath(new URL('../apps/web/', import.meta.url))],
 ];
 const PORT = Number(process.env.PORT) || 8941;
 const CONTENT_TYPES = {

@@ -1,11 +1,11 @@
-// The plans shipped in dist/plans/ must be valid maps, and the manifest must name one of them.
+// The plans shipped in apps/web/plans/ must be valid maps, and the manifest must name one of them.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { World, alignGrid, decodeMap, isGridAligned } from '../packages/core/src/index.js';
+import { World, alignGrid, decodeMap, isGridAligned } from '../../../packages/core/src/index.js';
 
-const PLANS_FOLDER = new URL('../dist/plans/', import.meta.url);
+const PLANS_FOLDER = new URL('../plans/', import.meta.url);
 const readPlan = name => JSON.parse(readFileSync(new URL(encodeURIComponent(name), PLANS_FOLDER), 'utf8'));
 const planFiles = readdirSync(PLANS_FOLDER).filter(name => name.endsWith('.json') && name !== 'index.json');
 

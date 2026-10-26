@@ -1,0 +1,11 @@
+{
+  "name": "@pixel-map-lab/web",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser client: map editor and Explore mode",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

@@ -15,7 +15,7 @@ Commands below run from `guard_qlearning`.
 | `scripts_extra/run_all.sh` | Training recipes and their initialization dependencies. |
 | `guardrl/` | Simulator, environment, observations, models, training, inference, and visualization code. |
 | `analysis/eval_runs.py`, `analysis/eval_tabular.py` | Run neural and tabular policies; generate new local evaluation output. |
-| `plans/` | Seven hand-made maps, also available in the app's `../dist/plans/`. |
+| `plans/` | Seven hand-made maps, also available in the app's `../apps/web/plans/`. |
 | `plans_curriculum/` | 31 curriculum maps and their index. |
 | `maps/` | Curriculum map generator and JavaScript map builder. |
 | `validation/` | Simulator cross-check tools; they run the app's JavaScript core in `../packages/core/src/` (override with `CORE_DIR`). |
