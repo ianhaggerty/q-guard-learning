@@ -20,6 +20,7 @@
     "start": "node scripts/dev.js",
     "serve": "node scripts/serve.js",
     "build:web": "npm run build -w apps/web",
-    "build:play": "npm run build -w apps/play"
+    "build:play": "npm run build -w apps/play",
+    "test:agents": "PYTHONPATH=artifacts:services/agent-inference python3 -m unittest discover -s services/agent-inference/tests"
   }
 }
