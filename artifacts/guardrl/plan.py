@@ -40,7 +40,8 @@ FIELD_OF_VIEW = 200.0
 FLOOR, OPAQUE, TRANSPARENT, DOOR = 0, 1, 2, 3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR = os.path.join(os.path.dirname(HERE), 'cache')
+# Overridable so containers can keep the cache on a volume instead of beside the package.
+CACHE_DIR = os.environ.get('GUARDRL_CACHE_DIR') or os.path.join(os.path.dirname(HERE), 'cache')
 
 
 @dataclass

@@ -27,7 +27,8 @@ pip install numpy numba torch matplotlib pillow
 ```
 
 Node.js is required for map generation and JavaScript cross-checks.
-The line-of-sight cache in `cache/` is rebuilt automatically.
+The line-of-sight cache in `cache/` is rebuilt automatically; set `GUARDRL_CACHE_DIR`
+to keep it elsewhere.
 
 `guardrl` is also an installable package (`pip install ./artifacts` from the repository
 root, add `[viz]` for the figure code); the agent-inference and trainer services install it
