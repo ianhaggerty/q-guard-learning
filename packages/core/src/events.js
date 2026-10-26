@@ -1,6 +1,8 @@
 // Sampled events. Every pixel on every floor is an independent Poisson process with
-// intensity `rate × max(0, pixel value)`. Events stay active until the explorer spots
-// them; spotting is itself a Poisson process with the detection hazard at the event.
+// intensity `rate × max(0, pixel value)`. Events stay active until an explorer spots
+// them; spotting is itself a Poisson process whose hazard is the sum of every explorer's
+// detection hazard at the event. Spots are not credited to anyone: explorers are scored
+// on the deterministic probability field instead (see probability.js).
 //
 // Both clocks are integrated exactly rather than per frame: each waiting time is an
 // exponential "budget" of cumulative intensity that elapsed exposure uses up, so the
@@ -90,13 +92,16 @@ export class EventSimulation {
     return event;
   }
 
-  /** Expose every active event to the explorer's view for `seconds`, resolving spotted ones. */
+  /** Expose every active event to the explorers' views for `seconds`, resolving spotted ones. */
   expose(seconds, world) {
     if (!seconds) return;
     const survivors = [];
     for (const event of this.active) {
-      const chance = event.floor === world.floorIndex ? world.detectionAt(event.x, event.y) : 0;
-      const hazard = hazardFromChance(chance), exposure = hazard * seconds;
+      let hazard = 0;
+      for (const explorer of world.explorers) {
+        if (explorer.floorIndex === event.floor) hazard += hazardFromChance(explorer.detectionAt(event.x, event.y));
+      }
+      const exposure = hazard * seconds;
       if (hazard > 0 && event.detectionBudget <= exposure) {
         const resolvedAt = this.elapsed + event.detectionBudget / hazard;
         const result = { ...event, resolvedAt, wait: resolvedAt - event.born };

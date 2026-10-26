@@ -43,6 +43,18 @@ test('new opening layout has two distinct pixel floors and both stair types', ()
   assert.equal(map.floors[1].pixels[i], upperBefore);
 });
 
+test('crossing a stair moves the explorer, not the map: its active floor is left alone', () => {
+  const map = twoFloors(), stair = testStair('straight', 0);
+  addStair(map, stair);
+  map.activeFloor = 0;
+  const world = new World(map);
+  placeExplorer(world, stair, 12, 5);
+  walk(world, stair, 1, 0, 9);
+  assert.equal(world.floorIndex, 1);
+  assert.equal(map.activeFloor, 0);
+  assert.equal(world.canStand(world.player.x, world.player.y), true);
+});
+
 for (const rotation of ROTATIONS) {
   test(`straight stairs cross halfway in both directions at ${rotation} degrees`, () => {
     const map = twoFloors(), stair = testStair('straight', rotation);
