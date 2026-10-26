@@ -38,3 +38,6 @@ __pycache__/
 # Python package build output
 /artifacts/build/
 *.egg-info/
+
+# Play client build output
+/apps/play/build/
