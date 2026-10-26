@@ -1,10 +1,18 @@
-// An Explore-mode session: an explorer moving through a map. The world owns what does
-// not belong to the explorer — the door states, the clock, and the event and probability
-// models — and advances everything together. The Explorer owns its position, floor,
-// facing, posture and energy.
+// An Explore-mode session: one or more explorers moving through a map. The world owns
+// what explorers share — the door states, the clock, and the event and probability
+// models — and advances everything together. Each Explorer owns its own position, floor,
+// facing, posture, energy and score.
 //
-// The world's own explorer API (`world.player`, `world.advance(dt, dx, dy)`,
-// `world.setLook` ...) acts on its primary explorer.
+// Rules for several explorers (the same as the Python training simulator's):
+//   * a door is open while any explorer on its floor is near it, and it is open for
+//     everyone, sight included;
+//   * explorers do not collide with each other;
+//   * a chair holds one explorer.
+// The Python simulator differs in one respect: it precomputes sight with only the doors
+// near the viewer open, so it cannot see through a door another guard holds open.
+//
+// Most single-explorer sessions use the World's own explorer API (`world.player`,
+// `world.advance(dt, dx, dy)`, `world.setLook` ...), which acts on the primary explorer.
 //
 // Exploring never changes saved map data: open doors stay encoded as door pixels, and
 // the map's active floor is left to the caller.
@@ -23,7 +31,7 @@ const MAX_SLICE_SECONDS = 0.05;
 
 export class World {
   /**
-   * options.startIndex: which numbered start to begin from (default Start 1)
+   * options.startIndex: which numbered start the primary explorer begins from (default Start 1)
    * options.random:     random number source for the event simulation
    */
   constructor(map, options = {}) {
@@ -33,18 +41,46 @@ export class World {
     this.paused = false;
     this.time = 0;
 
-    const startIndex = options.startIndex ?? 0;
-    if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= this.map.starts.length) {
-      throw new Error('Choose an existing numbered start.');
-    }
-    this.explorers = [new Explorer(this, 1, startIndex)];
-    this.primary.moveToNearestClearSpot();
+    this.explorers = [];
+    this.nextExplorerId = 1;
+    this.addExplorer({ startIndex: options.startIndex ?? 0 });
 
     this.events = new EventSimulation(this.map, options.random || Math.random);
     this.probabilities = new ProbabilityField(this.events);
   }
 
-  /** The explorer the single-explorer API below acts on. */
+  // -------------------------------------------------------------------------
+  // Explorers
+
+  /**
+   * Add an explorer at numbered start `startIndex` (moved to the nearest clear spot if the
+   * start is blocked). `id` defaults to the next unused number. Returns the Explorer.
+   */
+  addExplorer({ startIndex = 0, id = this.nextExplorerId } = {}) {
+    if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= this.map.starts.length) {
+      throw new Error('Choose an existing numbered start.');
+    }
+    if (this.explorers.some(explorer => explorer.id === id)) throw new Error('Each explorer needs its own id.');
+    if (Number.isInteger(id) && id >= this.nextExplorerId) this.nextExplorerId = id + 1;
+    const explorer = new Explorer(this, id, startIndex);
+    explorer.moveToNearestClearSpot();
+    this.explorers.push(explorer);
+    return explorer;
+  }
+
+  /**
+   * Remove an explorer; its chair is freed and its doors close on the next advance.
+   * Returns whether it was here. Events and the probability field still follow the
+   * primary explorer, so keep at least one.
+   */
+  removeExplorer(explorer) {
+    const index = this.explorers.indexOf(explorer);
+    if (index === -1) return false;
+    this.explorers.splice(index, 1);
+    return true;
+  }
+
+  /** The first explorer, which the single-explorer API below acts on. */
   get primary() {
     return this.explorers[0];
   }
@@ -52,14 +88,13 @@ export class World {
   // -------------------------------------------------------------------------
   // Doors
 
-  /** Open doors near the explorer and close all others, on every floor. Returns whether any changed. */
+  /** Open every door with an explorer on its floor nearby and close all others. Returns whether any changed. */
   updateDoors() {
     let changed = false;
-    const explorer = this.primary;
     this.floorDoors.forEach(({ doors }, floor) => {
       for (const door of doors) {
-        const near = explorer.floorIndex === floor
-          && doorDistance(door, this.map.width, explorer.position.x, explorer.position.y) <= DOOR_TRIGGER_DISTANCE;
+        const near = this.explorers.some(explorer => explorer.floorIndex === floor
+          && doorDistance(door, this.map.width, explorer.position.x, explorer.position.y) <= DOOR_TRIGGER_DISTANCE);
         if (door.open === near) continue;
         door.open = near;
         changed = true;
@@ -72,55 +107,56 @@ export class World {
   // Time
 
   /**
-   * Advance the whole simulation by `dt` seconds while the explorer tries to move in
-   * direction (dx, dy) (both zero to stay still). Time is integrated in slices of at
-   * most MAX_SLICE_SECONDS; energy is charged per substep for the activity actually
-   * performed. Returns whether the floor or any door changed.
+   * Advance the whole simulation by `dt` seconds, moving each explorer in its
+   * `movement` direction (see Explorer.setMovement). Time is integrated in slices of at
+   * most MAX_SLICE_SECONDS; within a slice the doors update, every explorer moves, the
+   * doors update again, and then events and the probability field advance. Energy is
+   * charged per substep for the activity actually performed. Returns whether any
+   * explorer's floor or any door changed.
+   *
+   * Explorers move in the order they were added, which matters only through doors.
+   * Calling this with whole slices (dt = 0.05 s) makes every call the same unit of work,
+   * so worlds given the same inputs stay identical.
    */
-  advance(dt, dx = 0, dy = 0) {
-    if (!Number.isFinite(dt) || dt < 0 || !Number.isFinite(dx) || !Number.isFinite(dy)) {
-      throw new Error('Invalid simulation interval.');
-    }
+  advanceAll(dt) {
+    if (!Number.isFinite(dt) || dt < 0) throw new Error('Invalid simulation interval.');
     if (this.paused || !dt) return false;
-    const explorer = this.primary, length = Math.hypot(dx, dy);
-    let moving = length > 0;
-    if (moving && explorer.sitting && !explorer.setSitting(false)) moving = false;
-    if (moving) explorer.orient(dx, dy);
+    const plans = this.explorers.map(explorer => planMovement(explorer));
+    const anyMoving = plans.some(plan => plan.moving);
 
     let remaining = dt, changed = false;
     while (remaining > 1e-9) {
       const slice = Math.min(remaining, MAX_SLICE_SECONDS);
       remaining -= slice;
-      if (!moving) {
-        changed = this.step(slice, 0, 0) || changed;
-        explorer.energy.record(explorer.sitting ? 'sitting' : 'standing', slice);
-        this.events.advance(slice, this);
-        continue;
-      }
-      // Choose the speed from what a tiny step in the travel direction would be.
-      const from = { ...explorer.position };
-      const probe = { x: from.x + dx / length * 0.01, y: from.y + dy / length * 0.01 };
-      const speed = ACTIVITIES[explorer.activityFor(explorer.stairDirection(from, probe))].speed / METRES_PER_PIXEL;
-      const recordSegment = (start, floor, seconds, distance) => {
-        // A blocked attempt counts as standing.
-        const activity = distance > 1e-8
-          ? explorer.activityFor(explorer.stairDirection(start, explorer.position, floor, explorer.floorIndex))
-          : 'standing';
-        explorer.energy.record(activity, seconds, distance);
-      };
-      changed = this.step(slice, dx, dy, speed, recordSegment) || changed;
+      this.time += slice;
+      changed = this.updateDoors() || changed;
+      for (const plan of plans) changed = moveFor(plan, slice) || changed;
+      changed = this.updateDoors() || changed;
       this.events.advance(slice, this);
-      this.probabilities.advance(slice, this);
+      if (anyMoving) this.probabilities.advance(slice, this);
     }
-    // Standing still keeps the pose fixed, so the probability field takes one exact step.
-    if (!moving) this.probabilities.advance(dt, this);
+    // With every pose fixed, the probability field takes one exact step.
+    if (!anyMoving) this.probabilities.advance(dt, this);
     return changed;
   }
 
   /**
-   * Low-level step of at most MAX_SLICE_SECONDS: the explorer moves in direction (dx, dy)
-   * at `speed` pixels per second, with doors updated before and after. Returns whether
-   * the floor or any door changed.
+   * Advance by `dt` seconds while the primary explorer tries to move in direction (dx, dy)
+   * (both zero to stay still). Other explorers keep their own movement.
+   */
+  advance(dt, dx = 0, dy = 0) {
+    if (!Number.isFinite(dt) || dt < 0 || !Number.isFinite(dx) || !Number.isFinite(dy)) {
+      throw new Error('Invalid simulation interval.');
+    }
+    this.primary.setMovement(dx, dy);
+    return this.advanceAll(dt);
+  }
+
+  /**
+   * Low-level step of at most MAX_SLICE_SECONDS: the primary explorer moves in direction
+   * (dx, dy) at `speed` pixels per second, with doors updated before and after. Events,
+   * energy and the probability field do not advance. Returns whether the floor or any
+   * door changed.
    */
   step(dt, dx, dy, speed = 24, onSegment = null) {
     dt = Math.max(0, Math.min(dt, MAX_SLICE_SECONDS));
@@ -179,4 +215,33 @@ export class World {
   nearbyChair() { return this.primary.nearbyChair(); }
   pathIsClear(target, distance) { return this.primary.pathIsClear(target, distance); }
   setSitting(sitting) { return this.primary.setSitting(sitting); }
+}
+
+/** An explorer's movement for one advance: it stands up first if it is sitting and wants to move. */
+function planMovement(explorer) {
+  const { dx, dy } = explorer.movement, length = Math.hypot(dx, dy);
+  let moving = length > 0;
+  if (moving && explorer.sitting && !explorer.setSitting(false)) moving = false;
+  if (moving) explorer.orient(dx, dy);
+  return { explorer, moving, dx, dy, length };
+}
+
+/** Move a planned explorer for one slice, charging energy per substep. Returns whether its floor changed. */
+function moveFor({ explorer, moving, dx, dy, length }, slice) {
+  if (!moving) {
+    explorer.energy.record(explorer.sitting ? 'sitting' : 'standing', slice);
+    return false;
+  }
+  // Choose the speed from what a tiny step in the travel direction would be.
+  const from = { ...explorer.position }, startFloor = explorer.floorIndex;
+  const probe = { x: from.x + dx / length * 0.01, y: from.y + dy / length * 0.01 };
+  const speed = ACTIVITIES[explorer.activityFor(explorer.stairDirection(from, probe))].speed / METRES_PER_PIXEL;
+  explorer.move(slice, dx, dy, speed, (start, floor, seconds, distance) => {
+    // A blocked attempt counts as standing.
+    const activity = distance > 1e-8
+      ? explorer.activityFor(explorer.stairDirection(start, explorer.position, floor, explorer.floorIndex))
+      : 'standing';
+    explorer.energy.record(activity, seconds, distance);
+  });
+  return explorer.floorIndex !== startFloor;
 }

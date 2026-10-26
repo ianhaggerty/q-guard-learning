@@ -1,8 +1,9 @@
-// One explorer in a World: its position, floor, facing, posture and energy, and how it
-// moves, sees and sits. The world owns what is shared: the doors, the clock, and the
-// event and probability models.
+// One explorer in a World: a person or an agent with its own position, floor, facing,
+// posture and energy. Explorers share the world's doors, events and probability
+// field, and they pass through each other.
 //
-// An explorer reads its own floor's pixels, never map.activeFloor.
+// An explorer reads its own floor's pixels, never map.activeFloor, so explorers on
+// different floors do not disturb each other or the map.
 
 import { MATERIAL } from './materials.js';
 import { CHAIR_SIZE, EXPLORER_RADIUS, METRES_PER_PIXEL } from './scale.js';
@@ -24,7 +25,7 @@ const SIT_REACH = 3.5;
 const COS_HALF_FIELD_OF_VIEW = Math.cos(FIELD_OF_VIEW * Math.PI / 360);
 
 export class Explorer {
-  /** Created by World, which places it at numbered start `startIndex`. */
+  /** Created by World.addExplorer, which places it at numbered start `startIndex`. */
   constructor(world, id, startIndex) {
     this.world = world;
     this.map = world.map;
@@ -43,9 +44,16 @@ export class Explorer {
     this.sitting = false;
     this.seatedChair = null;
     this.seatExit = null;
+    this.movement = { dx: 0, dy: 0 }; // direction World.advanceAll moves this explorer in
 
     this.distance = 0; // pixels travelled
     this.floorChanges = 0;
+  }
+
+  /** Try to move in direction (dx, dy) on every World.advanceAll; both zero to stay still. */
+  setMovement(dx, dy) {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) throw new Error('Invalid movement direction.');
+    this.movement = { dx, dy };
   }
 
   // -------------------------------------------------------------------------
@@ -55,7 +63,7 @@ export class Explorer {
     this.floorIndex = index;
   }
 
-  /** The doors of this explorer's floor. */
+  /** The doors of this explorer's floor, shared with every explorer on it. */
   get doors() {
     return this.world.floorDoors[this.floorIndex].doors;
   }
@@ -74,7 +82,7 @@ export class Explorer {
     return material === MATERIAL.DOOR && this.doors[this.doorIds[i]].open ? MATERIAL.FLOOR : material;
   }
 
-  /** Whether this explorer's body fits at (x, y) on its floor. */
+  /** Whether this explorer's body fits at (x, y) on its floor. Other explorers never block it. */
   canStand(x, y) {
     if (circleHitsCell(x, y, this.radius, (cellX, cellY) => this.effectiveMaterial(cellX, cellY) !== MATERIAL.FLOOR)) {
       return false;
@@ -143,7 +151,7 @@ export class Explorer {
    * Move for `dt` seconds in direction (dx, dy) at `speed` pixels per second. Each axis is
    * moved separately in short substeps so the explorer slides along walls.
    * `onSegment(start, floor, seconds, distance)` is called after every substep. Doors and
-   * time are the world's business (World.step and World.advance).
+   * time are the world's business (World.step and World.advanceAll).
    */
   move(dt, dx, dy, speed, onSegment = null) {
     const length = Math.hypot(dx, dy);
@@ -203,7 +211,7 @@ export class Explorer {
     return (dx * heading.x + dy * heading.y) / distance >= COS_HALF_FIELD_OF_VIEW - 1e-10;
   }
 
-  /** Opaque pixels and closed doors block sight. */
+  /** Opaque pixels and closed doors block sight. A door any explorer holds open does not. */
   blocksSight(x, y) {
     const material = this.effectiveMaterial(x, y);
     return material === MATERIAL.OPAQUE || material === MATERIAL.DOOR;
@@ -258,11 +266,16 @@ export class Explorer {
   // -------------------------------------------------------------------------
   // Sitting
 
-  /** The closest usable chair on this floor whose front can be reached in a straight line. */
+  /** Whether another explorer is sitting on `chair`. */
+  chairTaken(chair) {
+    return this.world.explorers.some(other => other !== this && other.sitting && other.seatedChair === chair.id);
+  }
+
+  /** The closest free chair on this floor whose front can be reached in a straight line. */
   nearbyChair() {
     let nearest = null, best = Infinity;
     for (const chair of this.map.chairs || []) {
-      if (chair.floor !== this.floorIndex || !isChairSpotClear(this.map, chair)) continue;
+      if (chair.floor !== this.floorIndex || !isChairSpotClear(this.map, chair) || this.chairTaken(chair)) continue;
       const front = chairFront(chair, this.radius);
       const distance = Math.hypot(this.position.x - front.x, this.position.y - front.y);
       if (distance > SIT_REACH || distance >= best || !this.canStand(front.x, front.y)) continue;
@@ -285,7 +298,7 @@ export class Explorer {
   }
 
   /**
-   * Sit on the nearby chair, or stand up at its front (or where the explorer was
+   * Sit on the nearby free chair, or stand up at its front (or where the explorer was
    * before sitting). Returns false when there is no chair to sit on or no clear spot to stand.
    */
   setSitting(sitting) {
