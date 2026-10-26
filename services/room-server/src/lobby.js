@@ -9,9 +9,10 @@
 //   { type: 'leave' }             go back to the lobby
 //   { type: 'input', move: [dx, dy], gait, look }   what this explorer wants to do
 //   { type: 'sit' }               sit down, or stand up
+//   { type: 'autopilot', on }     hand the explorer to a pretrained agent, or take it back
 //   { type: 'heatmap', on }       receive the room's probability field (a cheat)
 // To clients:
-//   { type: 'welcome', session: { id, name }, plans, rooms }
+//   { type: 'welcome', session: { id, name }, plans, rooms, autopilot }   autopilot: whether it is available
 //   { type: 'rooms', rooms }      the room list changed (sent to sessions in the lobby)
 //   { type: 'joined', room, plan, map }   now in `room`; `map` is the plan file to draw
 //   { type: 'state', ... }        a room snapshot (see Room.snapshot)
@@ -20,7 +21,7 @@
 //   { type: 'error', message }
 
 import { randomBytes, randomUUID } from 'node:crypto';
-import { HEAT_EVERY, Room, SNAPSHOT_EVERY, parseInput } from './room.js';
+import { DECISION_EVERY, HEAT_EVERY, Room, SNAPSHOT_EVERY, parseInput } from './room.js';
 
 /** A client whose unsent data passes this is too slow to keep up; it skips snapshots until it catches up. */
 const MAX_BUFFERED_BYTES = 1 << 20;
@@ -30,9 +31,11 @@ export class Lobby {
    * plans:            from loadPlans
    * maxRooms:         rooms this server will hold at once
    * maxHumansPerRoom: explorers per room
+   * agents:           the agent service client (see agents.js), or null for no autopilot
    */
-  constructor({ plans, maxRooms = 100, maxHumansPerRoom = 8 }) {
+  constructor({ plans, maxRooms = 100, maxHumansPerRoom = 8, agents = null }) {
     this.plans = new Map(plans.map(plan => [plan.id, plan]));
+    this.agents = agents;
     this.maxRooms = maxRooms;
     this.maxHumansPerRoom = maxHumansPerRoom;
     this.sessions = new Set();
@@ -53,6 +56,7 @@ export class Lobby {
       session: { id, name: session.name },
       plans: [...this.plans.values()].map(({ id: planId, name }) => ({ id: planId, name })),
       rooms: this.roomList(),
+      autopilot: Boolean(this.agents),
     });
     return session;
   }
@@ -78,6 +82,9 @@ export class Lobby {
         return;
       }
       case 'sit': return session.room?.requestSit(session);
+      case 'autopilot':
+        if (!this.agents) return send(session, { type: 'error', message: 'The autopilot is not available on this server.' });
+        return session.room?.setAutopilot(session, Boolean(message.on));
       case 'heatmap':
         session.heatmap = Boolean(message.on);
         if (session.heatmap && session.room) send(session, session.room.heat());
@@ -144,10 +151,11 @@ export class Lobby {
   // -------------------------------------------------------------------------
   // Time
 
-  /** Advance every room by one tick, and send snapshots and heatmaps when due. */
+  /** Advance every room by one tick; send snapshots and heatmaps, and ask for agent decisions, when due. */
   tick() {
     for (const room of this.rooms.values()) {
       room.step();
+      if (room.tick % DECISION_EVERY === 0) this.decide(room);
       if (room.tick % SNAPSHOT_EVERY === 0) this.broadcast(room, JSON.stringify(room.snapshot()), () => true);
       if (room.tick % HEAT_EVERY === 0) {
         const watching = session => session.heatmap;
@@ -161,6 +169,35 @@ export class Lobby {
     for (const session of room.members.keys()) {
       if (wanted(session) && session.socket.bufferedAmount <= MAX_BUFFERED_BYTES) sendRaw(session, text);
     }
+  }
+
+  /**
+   * Ask the agent service to decide for the room's autopilot explorers. One request per room
+   * is in flight at a time; the answer is applied at the room's next tick. If the service
+   * cannot answer, the autopilot explorers stop, and their players hear about it once until
+   * a decision succeeds again.
+   */
+  decide(room) {
+    if (!this.agents || room.deciding) return;
+    const request = room.agentRequest();
+    if (!request) return;
+    room.deciding = true;
+    const { ids, ...body } = request;
+    Promise.resolve()
+      .then(() => this.agents.act(body))
+      .then(actions => {
+        room.applyActions(ids, actions);
+        room.agentFailing = false;
+      })
+      .catch(() => {
+        room.haltAutopilots();
+        if (room.agentFailing) return;
+        room.agentFailing = true;
+        for (const [session, member] of room.members) {
+          if (member.autopilot) send(session, { type: 'error', message: 'The autopilot cannot decide right now; it will keep trying.' });
+        }
+      })
+      .finally(() => { room.deciding = false; });
   }
 }
 

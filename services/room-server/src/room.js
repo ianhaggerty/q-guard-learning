@@ -4,6 +4,12 @@
 //
 // The room is authoritative: clients send what they want to do (a direction, a gait, a
 // look, a request to sit or stand) and render the snapshots the room sends back.
+//
+// A player can hand their explorer to the autopilot: a pretrained guard agent. Every 0.5 s
+// (the agents' decision interval in training) the room describes itself in the agent
+// service's terms -- every explorer's pose and the probability field -- and applies the
+// actions that come back, translated from the training action space (move, gait, absolute
+// gaze) into the same controls a person uses.
 
 import { GRID, LOOK_OFFSETS, World, alignGrid, decodeMap } from '@pixel-map-lab/core';
 
@@ -12,6 +18,9 @@ export const TICK_SECONDS = 0.05;
 
 /** A snapshot goes to the room's members every this many ticks (ten a second). */
 export const SNAPSHOT_EVERY = 2;
+
+/** Agents decide every this many ticks: 0.5 s, as in training. */
+export const DECISION_EVERY = 10;
 
 /** Heatmaps go to the players who asked for them every this many ticks (twice a second). */
 export const HEAT_EVERY = 10;
@@ -25,6 +34,12 @@ const HEAT_REFERENCE_SECONDS = 60, HEAT_FULL_SECONDS = 600;
 
 const GAITS = new Set(['walk', 'run', 'sprint']);
 const STEPS = new Set([-1, 0, 1]);
+
+/** The training action space: gait and look by index, and moves 1-8 as headings E, SE, ... NE. */
+const GAIT_NAMES = ['walk', 'run', 'sprint'];
+const LOOK_NAMES = Object.keys(LOOK_OFFSETS).sort((a, b) => LOOK_OFFSETS[a] - LOOK_OFFSETS[b]);
+const MOVES = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+const SIT = 9;
 
 /** A client's input message as { dx, dy, gait, look }, or null when anything in it is invalid. */
 export function parseInput(message) {
@@ -44,7 +59,7 @@ export class Room {
     this.maxHumans = maxHumans;
     this.createdAt = Date.now();
     this.world = new World(alignGrid(decodeMap(plan.saved)), { empty: true });
-    this.members = new Map(); // session → { explorer, input, sit }
+    this.members = new Map(); // session → { explorer, input, sit, autopilot, action }
     this.joins = 0;
     this.tick = 0;
   }
@@ -61,7 +76,7 @@ export class Room {
   addMember(session) {
     const startIndex = this.joins++ % this.world.map.starts.length;
     const explorer = this.world.addExplorer({ startIndex, id: session.id });
-    this.members.set(session, { explorer, input: null, sit: false });
+    this.members.set(session, { explorer, input: null, sit: false, autopilot: false, action: null });
     return explorer;
   }
 
@@ -72,22 +87,82 @@ export class Room {
     this.members.delete(session);
   }
 
-  /** Keep the latest valid input; it is applied at the next tick. */
+  /** Keep the latest valid input; it is applied at the next tick. Ignored while the autopilot drives. */
   setInput(session, input) {
     const member = this.members.get(session);
-    if (member) member.input = input;
+    if (member && !member.autopilot) member.input = input;
   }
 
-  /** Ask to sit down, or stand up if already sitting, at the next tick. */
+  /** Ask to sit down, or stand up if already sitting, at the next tick. Ignored while the autopilot drives. */
   requestSit(session) {
     const member = this.members.get(session);
-    if (member) member.sit = true;
+    if (member && !member.autopilot) member.sit = true;
   }
 
-  /** Apply pending inputs and advance the world by one tick. */
+  /** Hand the explorer to the autopilot, or take it back (the explorer then stops until told otherwise). */
+  setAutopilot(session, on) {
+    const member = this.members.get(session);
+    if (!member || member.autopilot === on) return;
+    member.autopilot = on;
+    member.action = null;
+    member.input = null;
+    if (!on) member.explorer.setMovement(0, 0);
+  }
+
+  get hasAutopilot() {
+    return [...this.members.values()].some(member => member.autopilot);
+  }
+
+  /** Stop every autopilot-driven explorer, for when no decision can be had. */
+  haltAutopilots() {
+    for (const member of this.members.values()) if (member.autopilot) member.explorer.setMovement(0, 0);
+  }
+
+  /**
+   * The agent service request for this room (see services/agent-inference), or null when
+   * nobody is on autopilot: every explorer's pose in training terms, the field means, and
+   * which explorers to drive. `ids` names the driven explorers, for applyActions.
+   */
+  agentRequest() {
+    const members = [...this.members.values()];
+    const driven = members.flatMap((member, index) => (member.autopilot ? [index] : []));
+    if (!driven.length) return null;
+    const chairs = this.world.map.chairs;
+    const means = new Float32Array(this.world.probabilities.means);
+    return {
+      plan: this.plan.id,
+      ids: driven.map(index => members[index].explorer.id),
+      agents: driven,
+      explorers: members.map(({ explorer }) => ({
+        x: explorer.position.x,
+        y: explorer.position.y,
+        floor: explorer.floorIndex,
+        heading: explorer.heading,
+        look: LOOK_OFFSETS[explorer.look],
+        gait: GAIT_NAMES.indexOf(explorer.gait),
+        sitting: explorer.sitting,
+        seat: explorer.sitting ? chairs.findIndex(chair => chair.id === explorer.seatedChair) : -1,
+      })),
+      means: Buffer.from(means.buffer).toString('base64'),
+    };
+  }
+
+  /** Queue the agent's actions (one per id from agentRequest) for the next tick. */
+  applyActions(ids, actions) {
+    ids.forEach((id, k) => {
+      const member = [...this.members.values()].find(m => m.explorer.id === id);
+      if (member?.autopilot && Array.isArray(actions[k])) member.action = actions[k];
+    });
+  }
+
+  /** Apply pending inputs and agent actions, and advance the world by one tick. */
   step() {
     for (const member of this.members.values()) {
       const { explorer, input } = member;
+      if (member.action) {
+        driveWith(explorer, member.action);
+        member.action = null;
+      }
       if (input) {
         explorer.setGait(input.gait);
         explorer.setLook(input.look);
@@ -125,6 +200,7 @@ export class Room {
         sitting: explorer.sitting,
         credit: Number(explorer.credit.toPrecision(6)),
         kcal: round(explorer.energy.kcal, 3),
+        autopilot: this.members.get(session).autopilot,
       })),
       // For each floor, the indices of its open doors (in groupDoors order).
       doors: world.floorDoors.map(({ doors }) => doors.flatMap((door, index) => (door.open ? [index] : []))),
@@ -155,4 +231,22 @@ export class Room {
     });
     return { type: 'heat', block: GRID, width, height, floors };
   }
+}
+
+/** Steer an explorer with an agent action [move, gait, gaze], as guardrl's simulator applies it. */
+function driveWith(explorer, [move, gait, gaze]) {
+  explorer.setGait(GAIT_NAMES[gait] ?? 'walk');
+  let heading = explorer.heading;
+  if (move === SIT) {
+    explorer.setMovement(0, 0);
+    if (!explorer.sitting) explorer.setSitting(true);
+    heading = explorer.heading;
+  } else if (move >= 1 && move <= 8) {
+    explorer.setMovement(...MOVES[move - 1]);
+    heading = move - 1;
+  } else {
+    explorer.setMovement(0, 0);
+  }
+  // The agent picks an absolute gaze; the explorer looks relative to its direction of travel.
+  explorer.setLook(LOOK_NAMES[(((gaze - heading) % 8) + 8) % 8]);
 }

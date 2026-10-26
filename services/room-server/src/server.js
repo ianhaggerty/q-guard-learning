@@ -7,13 +7,15 @@
 // humans leave, and exits once no room is left (or Kubernetes' grace period runs out).
 //
 // Environment: PORT (8080), PLANS_DIR (the repository's plans), MAX_ROOMS (100),
-// MAX_HUMANS_PER_ROOM (8).
+// MAX_HUMANS_PER_ROOM (8), AGENT_URL (the agent inference service; without it there is no
+// autopilot).
 
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { loadPlans } from './plans.js';
 import { Lobby } from './lobby.js';
+import { agentClient } from './agents.js';
 import { TICK_SECONDS } from './room.js';
 
 /** Largest message a client may send; inputs are a few dozen bytes. */
@@ -30,11 +32,12 @@ const MAX_CATCH_UP_TICKS = 5;
 
 /**
  * Start a room server. Resolves to { port, lobby, draining(), close() } once listening.
- * options: port (0 picks a free one), plansDir, maxRooms, maxHumansPerRoom,
- * tickMs (wall-clock milliseconds per tick; tests run faster than real time).
+ * options: port (0 picks a free one), plansDir, maxRooms, maxHumansPerRoom, agents (an
+ * agent service client, or null), tickMs (wall-clock milliseconds per tick; tests run
+ * faster than real time).
  */
-export function startServer({ port = 8080, plansDir, maxRooms, maxHumansPerRoom, tickMs = TICK_SECONDS * 1000 } = {}) {
-  const lobby = new Lobby({ plans: loadPlans(plansDir), maxRooms, maxHumansPerRoom });
+export function startServer({ port = 8080, plansDir, maxRooms, maxHumansPerRoom, agents = null, tickMs = TICK_SECONDS * 1000 } = {}) {
+  const lobby = new Lobby({ plans: loadPlans(plansDir), maxRooms, maxHumansPerRoom, agents });
 
   const server = createServer((request, response) => {
     if (request.url === '/healthz') response.writeHead(200).end('ok');
@@ -137,8 +140,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     plansDir: env.PLANS_DIR || undefined,
     maxRooms: Number(env.MAX_ROOMS) || undefined,
     maxHumansPerRoom: Number(env.MAX_HUMANS_PER_ROOM) || undefined,
+    agents: env.AGENT_URL ? agentClient(env.AGENT_URL) : null,
   });
-  console.log(`Room server on :${room.port} (${room.lobby.plans.size} plans)`);
+  console.log(`Room server on :${room.port} (${room.lobby.plans.size} plans, autopilot ${env.AGENT_URL ? 'via ' + env.AGENT_URL : 'off'})`);
   process.on('SIGTERM', async () => {
     console.log('Draining: no new rooms; waiting for live rooms to empty.');
     await room.draining();
