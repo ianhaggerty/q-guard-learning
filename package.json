@@ -10,7 +10,8 @@
   },
   "workspaces": [
     "packages/core",
-    "apps/web"
+    "apps/web",
+    "services/room-server"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",

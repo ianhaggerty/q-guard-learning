@@ -1,0 +1,14 @@
+{
+  "name": "@pixel-map-lab/room-server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Authoritative multiplayer rooms running the shared simulation core",
+  "type": "module",
+  "dependencies": {
+    "@pixel-map-lab/core": "1.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  }
+}
