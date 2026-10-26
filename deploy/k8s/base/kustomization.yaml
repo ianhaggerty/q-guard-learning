@@ -10,3 +10,4 @@ resources:
   - api.yaml
   - room-server.yaml
   - agent-inference.yaml
+  - ingress.yaml

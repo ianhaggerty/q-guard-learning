@@ -1,0 +1,22 @@
+# One host: the client at /, the API at /api, room WebSockets at /rooms. Overlays set the host
+# and TLS. Phase 5 routes /rooms to the specific game server holding a room.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-map-lab
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: api, port: { name: http } }
+          - path: /rooms
+            pathType: Prefix
+            backend:
+              service: { name: room-server, port: { name: http } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: web, port: { name: http } }
