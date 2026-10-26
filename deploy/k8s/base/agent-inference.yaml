@@ -1,4 +1,5 @@
-# Guard-agent actions for every room, batched. CPU only: a forward pass is 0.3-1.5 ms.
+# Guard-agent decisions for rooms whose players hand control to the autopilot: about 2 ms a
+# decision on CPU. Checkpoints, plans and their sight caches are baked into the image.
 # The CPU limit doubles as the thread count: numba and torch would otherwise size their pools
 # from the node's cores and be throttled. The limit is passed in through the downward API
 # (rounded up to whole cores).
@@ -42,15 +43,8 @@ spec:
           resources:
             requests: { cpu: "2", memory: 2Gi }
             limits: { cpu: "2", memory: 3Gi }
-          volumeMounts:
-            - name: sight-cache
-              mountPath: /var/cache/guardrl
           securityContext:
             allowPrivilegeEscalation: false
-      volumes:
-        # Line-of-sight caches; phase 4 fills these from object storage (built by a plan-prep job).
-        - name: sight-cache
-          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
