@@ -1,5 +1,11 @@
-# Guard-agent decisions for rooms whose players hand control to the autopilot: about 2 ms a
-# decision on CPU. Checkpoints, plans and their sight caches are baked into the image.
+# Guard-agent decisions for rooms whose players hand control to their agent (about 2 ms a
+# decision on CPU), and live fine-tuning of each player's own agent. Checkpoints, plans and
+# their sight caches are baked into the image.
+#
+# Players' tuned agents live in this process, so every request for a player must reach the
+# same pod: ONE replica, no autoscaler, until phase 5 routes players to a consistent replica
+# (and moves training into its own service). Memory allows MAX_TUNED_MODELS tuned agents of
+# about 56 MB each on top of the pretrained models.
 # The CPU limit doubles as the thread count: numba and torch would otherwise size their pools
 # from the node's cores and be throttled. The limit is passed in through the downward API
 # (rounded up to whole cores).
@@ -8,7 +14,7 @@ kind: Deployment
 metadata:
   name: agent-inference
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: agent-inference
@@ -26,6 +32,8 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: MAX_TUNED_MODELS
+              value: "32"
             - name: NUMBA_NUM_THREADS
               valueFrom:
                 resourceFieldRef: { resource: limits.cpu, divisor: "1" }
@@ -41,8 +49,8 @@ spec:
           livenessProbe:
             httpGet: { path: /healthz, port: http }
           resources:
-            requests: { cpu: "2", memory: 2Gi }
-            limits: { cpu: "2", memory: 3Gi }
+            requests: { cpu: "2", memory: 3Gi }
+            limits: { cpu: "2", memory: 4Gi }
           securityContext:
             allowPrivilegeEscalation: false
 ---
@@ -57,20 +65,3 @@ spec:
     - name: http
       port: 80
       targetPort: http
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: agent-inference
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: agent-inference
-  minReplicas: 2
-  maxReplicas: 20
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target: { type: Utilization, averageUtilization: 70 }
