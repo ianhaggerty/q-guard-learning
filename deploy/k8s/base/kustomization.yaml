@@ -1,0 +1,9 @@
+# Workloads shared by every environment. Overlays set the namespace, image tags, replica
+# counts and node placement.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: pixel-map-lab
+resources:
+  - web.yaml
