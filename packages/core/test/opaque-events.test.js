@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MATERIAL, World, fillRect, updateUnresolvedMean } from '../packages/core/src/index.js';
+import { MATERIAL, World, fillRect, updateUnresolvedMean } from '../src/index.js';
 import { weightedMap, within } from './helpers.js';
 
 const near = within(1e-9);

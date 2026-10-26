@@ -12,7 +12,7 @@
     "packages/core"
   ],
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "npm test --workspaces --if-present && node --test tests/*.test.js",
     "start": "node scripts/serve.js"
   }
 }

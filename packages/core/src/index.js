@@ -1,5 +1,5 @@
 // Public API of the simulation core. The core has no DOM dependencies and runs both in
-// the browser and under Node (see tests/).
+// the browser and under Node (see test/).
 
 export { GRID, METRES_PER_PIXEL, EXPLORER_RADIUS, WALL_THICKNESS, CHAIR_SIZE } from './scale.js';
 export { MATERIAL, MATERIAL_NAMES, COLORS, RGB, toRGBA, materialsFromRGBA } from './materials.js';

@@ -2,7 +2,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EventSimulation, MATERIAL, World, cloneMap, encodeMap, fillRect } from '../packages/core/src/index.js';
+import { EventSimulation, MATERIAL, World, cloneMap, encodeMap, fillRect } from '../src/index.js';
 import { seededRandom, weightedMap, within } from './helpers.js';
 
 const near = within(1e-8);

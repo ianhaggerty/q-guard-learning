@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   alignGrid, assignValue, cloneMap, decodeMap, defaultValue, encodeMap, normalizeMap, paintGrid, selectionRect, toRGBA,
   valueAt, valueSummary,
-} from '../packages/core/src/index.js';
+} from '../src/index.js';
 
 /** A blank, grid-aligned 30 × 30 single-floor map. */
 function blankMap() {

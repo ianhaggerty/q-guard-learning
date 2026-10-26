@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   ACTIVITIES, BODY_MASS_KG, EnergyTracker, MATERIAL, METRES_PER_PIXEL, World, addChair, addStair, alignGrid, assignValue,
   cloneMap, encodeMap, fillRect, selectionRect, stairToWorld,
-} from '../packages/core/src/index.js';
+} from '../src/index.js';
 import { blankBuilding, courtyard, within } from './helpers.js';
 
 const near = within(1e-8);
