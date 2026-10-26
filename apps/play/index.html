@@ -29,6 +29,10 @@
         <ol id="planList" class="list"></ol>
       </section>
       <section class="panel">
+        <div id="agentsPanel" hidden>
+          <div class="panel-title">Your agents <span>playing without you</span></div>
+          <ul id="agentList" class="list"></ul>
+        </div>
         <div class="panel-title">02 <span>Live rooms</span></div>
         <ul id="roomList" class="list"></ul>
         <p id="noRooms" class="empty">No rooms are running. Start one and share the room code.</p>
@@ -64,7 +68,7 @@
       </dl>
       <div class="panel-title">Explorers</div>
       <ol id="roster" class="roster"></ol>
-      <p class="note">Score is the expected number of events your looking resolves (× 1000), shared fairly when several people watch the same spot. The agent drives with a model trained on this map; it spends energy only when it pays, so it may stand still while little is unseen. The heatmap shows where unspotted events are likely to be.</p>
+      <p class="note">Score is the expected number of events your looking resolves (× 1000), shared fairly when several people watch the same spot. The agent drives with a model trained on this map; it spends energy only when it pays, so it may stand still while little is unseen. If you leave while it drives, it keeps playing until you come back or close the tab. The heatmap shows where unspotted events are likely to be.</p>
       <p class="keys"><kbd>WASD</kbd> move · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> walk / run / sprint · <kbd>U I O J L M , .</kbd> look · <kbd>E</kbd> sit</p>
     </aside>
   </section>

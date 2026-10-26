@@ -3,7 +3,7 @@
 // says, and closing the tab ends the session (and leaves any room).
 
 import { byId, toast } from './dom.js';
-import { showPlans, showRooms } from './lobby.js';
+import { showAgents, showPlans, showRooms } from './lobby.js';
 import { Game } from './game.js';
 
 const roomElements = {
@@ -11,6 +11,7 @@ const roomElements = {
   score: byId('hudScore'), team: byId('hudTeam'), unspotted: byId('hudUnspotted'), spotted: byId('hudSpotted'),
   kcal: byId('hudKcal'), pose: byId('hudPose'), time: byId('hudTime'), roster: byId('roster'),
   autopilot: byId('autopilotToggle'), autopilotNote: byId('autopilotNote'), heatmap: byId('heatmapToggle'),
+  leave: byId('leaveRoom'),
 };
 
 let socket = null, session = null, plans = [], game = null, autopilotAvailable = false;
@@ -38,6 +39,9 @@ const handlers = {
   },
   rooms(message) {
     showRooms(byId('roomList'), byId('noRooms'), message.rooms, room => send({ type: 'join', room }));
+  },
+  agents(message) {
+    showAgents(byId('agentsPanel'), byId('agentList'), message.agents, room => send({ type: 'join', room }));
   },
   joined(message) {
     game?.stop();

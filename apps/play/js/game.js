@@ -29,7 +29,7 @@ export class Game {
     this.view = new RoomView(elements.canvas, joined.map);
     this.snapshots = new SnapshotBuffer();
     this.intent = new Intent();
-    this.autopilot = false;
+    this.autopilot = joined.you.autopilot;
     this.frame = 0;
     elements.title.textContent = joined.room.planName;
     elements.code.textContent = joined.room.id;
@@ -90,10 +90,11 @@ export class Game {
   }
 
   showAutopilot() {
-    const { autopilot } = this.elements;
+    const { autopilot, leave } = this.elements;
     autopilot.textContent = this.autopilot ? 'Take back control' : 'Let the agent drive';
     autopilot.setAttribute('aria-pressed', this.autopilot);
     autopilot.classList.toggle('outline', !this.autopilot);
+    leave.textContent = this.autopilot ? 'Leave, agent stays' : 'Leave';
   }
 
   loop(now) {
@@ -128,7 +129,7 @@ export class Game {
       name.textContent = explorer.id === this.selfId ? `${explorer.name} (you)` : explorer.name;
       if (explorer.autopilot) {
         const badge = document.createElement('em');
-        badge.textContent = 'agent';
+        badge.textContent = explorer.away ? 'agent · away' : 'agent';
         name.append(' ', badge);
       }
       const where = document.createElement('small');
