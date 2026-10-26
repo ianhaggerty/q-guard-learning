@@ -5,9 +5,9 @@
 **/__pycache__
 **/*.egg-info
 apps/web/build
+apps/play/build
 artifacts/build
 artifacts/cache
-artifacts/final_models
 artifacts/runs
 artifacts/results
 artifacts/report
