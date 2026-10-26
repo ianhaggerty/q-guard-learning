@@ -10,9 +10,10 @@ const roomElements = {
   canvas: byId('roomCanvas'), floor: byId('floorLabel'), title: byId('roomTitle'), code: byId('roomCode'),
   score: byId('hudScore'), team: byId('hudTeam'), unspotted: byId('hudUnspotted'), spotted: byId('hudSpotted'),
   kcal: byId('hudKcal'), pose: byId('hudPose'), time: byId('hudTime'), roster: byId('roster'),
+  autopilot: byId('autopilotToggle'), autopilotNote: byId('autopilotNote'), heatmap: byId('heatmapToggle'),
 };
 
-let socket = null, session = null, plans = [], game = null;
+let socket = null, session = null, plans = [], game = null, autopilotAvailable = false;
 
 function send(message) {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -30,6 +31,7 @@ const handlers = {
   welcome(message) {
     session = message.session;
     plans = message.plans;
+    autopilotAvailable = message.autopilot;
     byId('sessionName').textContent = session.name;
     showPlans(byId('planList'), plans, plan => send({ type: 'create', plan }));
     showLobby(message.rooms);
@@ -41,10 +43,13 @@ const handlers = {
     game?.stop();
     byId('lobby').hidden = true;
     byId('room').hidden = false;
-    game = new Game({ connection: { send }, elements: roomElements, selfId: session.id, joined: message });
+    game = new Game({ connection: { send }, elements: roomElements, selfId: session.id, joined: message, autopilot: autopilotAvailable });
   },
   state(message) {
     game?.onState(message);
+  },
+  heat(message) {
+    game?.onHeat(message);
   },
   left() {
     showLobby();

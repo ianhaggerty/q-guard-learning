@@ -89,3 +89,70 @@ test('room and server limits', () => {
   lobby.handle(b, { type: 'join', room: a.room.id });
   assert.match(s2.last('error').message, /shutting down/);
 });
+
+/** A fake agent service: records requests and answers with `reply` (or rejects when it throws). */
+function fakeAgents(reply) {
+  const requests = [];
+  return { requests, act: async request => { requests.push(request); return reply(request); } };
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('without an agent service the autopilot is unavailable', () => {
+  const lobby = lobbyWith();
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  assert.equal(socket.last('welcome').autopilot, false);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  lobby.handle(human, { type: 'autopilot', on: true });
+  assert.match(socket.last('error').message, /not available/);
+});
+
+test('autopilot explorers get a decision every 0.5 s from the agent service', async () => {
+  const agents = fakeAgents(request => request.agents.map(() => [1, 0, 0]));
+  const lobby = lobbyWith({ agents });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  assert.equal(socket.last('welcome').autopilot, true);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  lobby.handle(human, { type: 'autopilot', on: true });
+  const explorer = human.room.members.get(human).explorer, x = explorer.position.x;
+  for (let tick = 0; tick < 10; tick++) lobby.tick();
+  await settle();
+  assert.equal(agents.requests.length, 1);
+  assert.equal(agents.requests[0].ids, undefined, 'ids stay in the room server');
+  for (let tick = 0; tick < 10; tick++) lobby.tick();
+  await settle();
+  assert.ok(explorer.position.x > x);
+  assert.equal(agents.requests.length, 2);
+  assert.equal(socket.last('state').explorers[0].autopilot, true);
+});
+
+test('when the agent service fails, autopilot explorers stop and their players are told once', async () => {
+  const agents = fakeAgents(() => { throw new Error('down'); });
+  const lobby = lobbyWith({ agents });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  lobby.handle(human, { type: 'autopilot', on: true });
+  for (let round = 0; round < 3; round++) {
+    for (let tick = 0; tick < 10; tick++) lobby.tick();
+    await settle();
+  }
+  assert.equal(agents.requests.length, 3);
+  assert.equal(socket.sent.filter(message => message.type === 'error').length, 1);
+  assert.deepEqual(human.room.members.get(human).explorer.movement, { dx: 0, dy: 0 });
+});
+
+test('heatmaps go only to the players who asked, twice a second', () => {
+  const lobby = lobbyWith();
+  const [cheat, honest] = [fakeSocket(), fakeSocket()];
+  const [a, b] = [lobby.connect(cheat), lobby.connect(honest)];
+  lobby.handle(a, { type: 'create', plan: '3' });
+  lobby.handle(b, { type: 'join', room: a.room.id });
+  lobby.handle(a, { type: 'heatmap', on: true });
+  assert.ok(cheat.last('heat'), 'sent at once on asking');
+  for (let tick = 0; tick < 20; tick++) lobby.tick();
+  assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+  assert.equal(honest.sent.filter(m => m.type === 'heat').length, 0);
+  lobby.handle(a, { type: 'heatmap', on: false });
+  for (let tick = 0; tick < 20; tick++) lobby.tick();
+  assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+});

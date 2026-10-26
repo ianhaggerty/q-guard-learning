@@ -26,11 +26,19 @@ USER 10001
 RUN GUARDRL_CACHE_DIR=/tmp/warmup-los python -m guardrl.warmup /opt/warmup/plan.json --heuristic \
  && rm -rf /tmp/warmup-los
 
+# The agent service carries the pretrained checkpoints and the plans they were trained on, and
+# builds those plans' line-of-sight caches (and warms every model) at build time, so a new pod
+# is ready in seconds.
 FROM base AS agent-inference
 USER root
 COPY services/agent-inference /src/agent-inference
 RUN pip install --no-cache-dir --no-deps /src/agent-inference
+COPY artifacts/final_models /opt/models
+COPY apps/web/plans /opt/plans
+ENV MODELS_DIR=/opt/models PLANS_DIR=/opt/plans GUARDRL_CACHE_DIR=/opt/sight-cache
+RUN mkdir -p /opt/sight-cache && chown 10001 /opt/sight-cache
 USER 10001
+RUN python -c "from agent_inference.policy import Policies; Policies().preload()"
 EXPOSE 8080
 CMD ["python", "-m", "agent_inference.server"]
 
