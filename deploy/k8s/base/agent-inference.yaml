@@ -1,0 +1,82 @@
+# Guard-agent actions for every room, batched. CPU only: a forward pass is 0.3-1.5 ms.
+# The CPU limit doubles as the thread count: numba and torch would otherwise size their pools
+# from the node's cores and be throttled. The limit is passed in through the downward API
+# (rounded up to whole cores).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-inference
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-inference
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-inference
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: agent-inference
+          image: pml/agent-inference
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: NUMBA_NUM_THREADS
+              valueFrom:
+                resourceFieldRef: { resource: limits.cpu, divisor: "1" }
+            - name: OMP_NUM_THREADS
+              valueFrom:
+                resourceFieldRef: { resource: limits.cpu, divisor: "1" }
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          resources:
+            requests: { cpu: "2", memory: 2Gi }
+            limits: { cpu: "2", memory: 3Gi }
+          volumeMounts:
+            - name: sight-cache
+              mountPath: /var/cache/guardrl
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        # Line-of-sight caches; phase 4 fills these from object storage (built by a plan-prep job).
+        - name: sight-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-inference
+spec:
+  selector:
+    app.kubernetes.io/name: agent-inference
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-inference
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent-inference
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
