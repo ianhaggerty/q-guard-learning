@@ -1,6 +1,6 @@
 """Batched, multi-guard numba port of the Pixel-Map-Lab Explore simulation.
 
-Faithful to dist/js/core (world.js, energy.js, detection.js, probability.js,
+Faithful to packages/core/src (world.js, energy.js, detection.js, probability.js,
 stairs.js, chairs.js, doors.js):
   * movement in <=0.05 s slices, axis-separated sub-steps of <=0.4 px, circle body
     of radius 1.1 px colliding with non-floor pixels, closed doors and chairs;

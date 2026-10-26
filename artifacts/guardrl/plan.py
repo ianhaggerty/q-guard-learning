@@ -1,6 +1,6 @@
 """Loading Pixel-Map-Lab floor plans into flat numpy arrays for the numba simulator.
 
-Everything here mirrors dist/js/core/*.js:
+Everything here mirrors packages/core/src/*.js:
   * materials: 0 floor, 1 opaque, 2 transparent, 3 opaque door           (materials.js)
   * per-pixel values (event weights), defaulting to 1 on floor, else 0   (values.js)
   * doors = 4-connected groups of door pixels                             (doors.js)

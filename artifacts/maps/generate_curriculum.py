@@ -15,7 +15,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-CORE = os.path.join(ROOT, 'js_core')
+CORE = os.path.join(os.path.dirname(ROOT), 'packages', 'core', 'src')
 RUNTIME = shutil.which('node') or shutil.which('bun')
 FLOOR, OPAQUE, TRANSPARENT, DOOR = 0, 1, 2, 3
 

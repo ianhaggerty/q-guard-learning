@@ -18,7 +18,7 @@ Commands below run from `guard_qlearning`.
 | `plans/` | Seven hand-made maps, also available in the app's `../dist/plans/`. |
 | `plans_curriculum/` | 31 curriculum maps and their index. |
 | `maps/` | Curriculum map generator and JavaScript map builder. |
-| `validation/`, `js_core/` | Simulator cross-check tools and reference JavaScript core. |
+| `validation/` | Simulator cross-check tools; they run the app's JavaScript core in `../packages/core/src/` (override with `CORE_DIR`). |
 
 ## Setup
 
