@@ -1,0 +1,15 @@
+# Images build from the repository root (they share packages/core and artifacts/guardrl);
+# keep the context to source files.
+.git
+**/node_modules
+**/__pycache__
+**/*.egg-info
+apps/web/build
+artifacts/build
+artifacts/cache
+artifacts/final_models
+artifacts/runs
+artifacts/results
+artifacts/report
+artifacts/figures
+artifacts/logs
