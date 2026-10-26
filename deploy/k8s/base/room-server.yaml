@@ -1,6 +1,8 @@
 # Authoritative game rooms. Stateful (rooms live in memory), so it is NOT autoscaled by an HPA:
-# scaling down would kill live games. Phase 5 replaces this Deployment with an Agones Fleet,
-# which allocates rooms to servers and only removes servers with no live rooms.
+# scaling down would kill live games. It runs as ONE replica for now: a room exists only in the
+# pod that created it, and nothing yet routes a joining player to that pod. Phase 5 replaces
+# this Deployment with an Agones Fleet, which allocates rooms to servers, routes players to the
+# right one, and only removes servers with no live rooms.
 #
 # Node runs the simulation on one thread, so one core is its ceiling: request a whole core and
 # set no CPU limit, because CFS throttling would stall the 20 Hz tick. On SIGTERM the server
@@ -10,7 +12,7 @@ kind: Deployment
 metadata:
   name: room-server
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: room-server
