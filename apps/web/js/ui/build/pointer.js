@@ -1,6 +1,6 @@
 // Pointer input on the map canvas: panning in both modes, and the Build tools.
 
-import { valueAt } from '../../core/index.js';
+import { valueAt } from '@pixel-map-lab/core';
 import { state, view, invalidateRaster, isExploring } from '../state.js';
 import { byId, focusCanvas } from '../dom.js';
 import { canvas, clampToMap, isOnMap, toMapPoint, toPixel, updateBrushCursor } from '../viewport.js';

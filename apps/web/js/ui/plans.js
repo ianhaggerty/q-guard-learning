@@ -1,7 +1,7 @@
 // Plans are ordinary map files in apps/web/plans/. plans/index.json names the one that
 // opens when there is no autosave.
 
-import { alignGrid, decodeMap } from '../core/index.js';
+import { alignGrid, decodeMap } from '@pixel-map-lab/core';
 
 const PLANS_FOLDER = new URL('../../plans/', import.meta.url);
 

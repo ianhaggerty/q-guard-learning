@@ -1,6 +1,6 @@
 // The floor bar above the canvas: choosing the building floor and adding floors.
 
-import { MAX_FLOORS, addFloor } from '../../core/index.js';
+import { MAX_FLOORS, addFloor } from '@pixel-map-lab/core';
 import { state, clearSelections, invalidateRaster, isExploring } from '../state.js';
 import { byId, pluralize, replaceOptions, toast } from '../dom.js';
 import { scheduleSave } from '../autosave.js';

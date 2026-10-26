@@ -1,6 +1,6 @@
 // The Starts tool: numbered places where Explore can begin, plus the "Explore from" picker.
 
-import { GRID, removeStart, setStart, snap, validateStart } from '../../core/index.js';
+import { GRID, removeStart, setStart, snap, validateStart } from '@pixel-map-lab/core';
 import { state, invalidateRaster, isExploring } from '../state.js';
 import { byId, pluralize, replaceOptions, toast } from '../dom.js';
 import { scheduleSave } from '../autosave.js';

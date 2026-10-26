@@ -1,6 +1,6 @@
 // Switching between Build and Explore, and running the Explore session each frame.
 
-import { DETECTION_HALF_RANGE, METRES_PER_PIXEL, World } from '../../core/index.js';
+import { DETECTION_HALF_RANGE, METRES_PER_PIXEL, World } from '@pixel-map-lab/core';
 import { state, invalidateRaster, isExploring } from '../state.js';
 import { byId, focusCanvas, setText, toast } from '../dom.js';
 import { canvas } from '../viewport.js';

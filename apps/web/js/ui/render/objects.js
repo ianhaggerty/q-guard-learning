@@ -4,7 +4,7 @@
 import {
   CHAIR_SIZE, chairContains, chairFront, connectsFloor, returnLanes, stairClearance, stairCrossing,
   stairFlightLength, stairToWorld,
-} from '../../core/index.js';
+} from '@pixel-map-lab/core';
 import { state, view, isExploring } from '../state.js';
 import { ctx, toPixel } from '../viewport.js';
 import { stairFromControls } from '../build/stairs.js';

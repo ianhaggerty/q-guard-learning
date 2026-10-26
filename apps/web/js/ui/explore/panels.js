@@ -1,6 +1,6 @@
 // The Explore readouts: facing, posture, energy table, event counts and the probability sum.
 
-import { ACTIVITIES, DIRECTIONS, FIELD_OF_VIEW, isBackwardLook, kcalPerMinute } from '../../core/index.js';
+import { ACTIVITIES, DIRECTIONS, FIELD_OF_VIEW, isBackwardLook, kcalPerMinute } from '@pixel-map-lab/core';
 import { state } from '../state.js';
 import { byId, setPressed, setText } from '../dom.js';
 

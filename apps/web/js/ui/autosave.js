@@ -1,7 +1,7 @@
 // Autosave to localStorage. The map is saved in the JSON file format shortly after each
 // change, and immediately when the page is hidden.
 
-import { alignGrid, decodeMap, encodeMap } from '../core/index.js';
+import { alignGrid, decodeMap, encodeMap } from '@pixel-map-lab/core';
 import { state } from './state.js';
 import { byId } from './dom.js';
 

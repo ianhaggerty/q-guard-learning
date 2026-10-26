@@ -2,7 +2,7 @@
 // settings (gait, look direction, sitting, pause, detection range and event rate).
 // Input only records directions; time advances in the animation frame loop.
 
-import { DETECTION_HALF_RANGE, EVENT_RATE } from '../../core/index.js';
+import { DETECTION_HALF_RANGE, EVENT_RATE } from '@pixel-map-lab/core';
 import { state, isExploring } from '../state.js';
 import { byId, focusCanvas, toast } from '../dom.js';
 import { syncExplorePanels } from './panels.js';

@@ -1,6 +1,6 @@
 // The Chair tool: placing, turning and removing chairs on the active floor.
 
-import { addChair, chairContains, removeChair, snap, validateChair } from '../../core/index.js';
+import { addChair, chairContains, removeChair, snap, validateChair } from '@pixel-map-lab/core';
 import { state, isExploring } from '../state.js';
 import { byId, toast } from '../dom.js';
 import { commitEdit, rememberForUndo } from '../document.js';

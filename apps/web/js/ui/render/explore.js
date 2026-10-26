@@ -2,7 +2,7 @@
 
 import {
   DIRECTIONS, FIELD_OF_VIEW, METRES_PER_PIXEL, detectionChance, eccentricityDegrees, headingVector,
-} from '../../core/index.js';
+} from '@pixel-map-lab/core';
 import { state, view } from '../state.js';
 import { byId } from '../dom.js';
 import { ctx } from '../viewport.js';

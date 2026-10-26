@@ -1,7 +1,7 @@
 // Brush, line, rectangle, fill and eraser strokes on the active floor. A stroke is one
 // undo step, however long the drag.
 
-import { brushBounds, eraseAt, floodFill, gridLine, gridRect, paintGrid } from '../../core/index.js';
+import { brushBounds, eraseAt, floodFill, gridLine, gridRect, paintGrid } from '@pixel-map-lab/core';
 import { state, invalidateRaster } from '../state.js';
 import { byId, pluralize, toast } from '../dom.js';
 import { commitEdit, rememberForUndo } from '../document.js';

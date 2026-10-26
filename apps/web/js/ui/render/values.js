@@ -1,7 +1,7 @@
 // The Values overlay (one number per grid cell, custom cells tinted) and the Set values
 // selection rectangle.
 
-import { GRID, MATERIAL, hasCustomValue, valueAt } from '../../core/index.js';
+import { GRID, MATERIAL, hasCustomValue, valueAt } from '@pixel-map-lab/core';
 import { state, view } from '../state.js';
 import { byId } from '../dom.js';
 import { ctx, isOnScreen } from '../viewport.js';

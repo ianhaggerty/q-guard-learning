@@ -1,6 +1,6 @@
 // Entry point: load the starting map, wire up every control and start the frame loop.
 
-import { alignGrid, createBlankMap } from '../core/index.js';
+import { alignGrid, createBlankMap } from '@pixel-map-lab/core';
 import { state, isExploring } from './state.js';
 import { byId, toast } from './dom.js';
 import { readAutosave } from './autosave.js';

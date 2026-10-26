@@ -1,7 +1,7 @@
 // State shared by the UI modules. There is one map, one mode and at most one Explore
 // session at a time; modules read and update these fields directly.
 
-import { GRID, MATERIAL } from '../core/index.js';
+import { GRID, MATERIAL } from '@pixel-map-lab/core';
 
 export const state = {
   /** The building being edited. Set at startup; replaced on undo/redo, new maps and imports. */

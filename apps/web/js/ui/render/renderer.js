@@ -1,7 +1,7 @@
 // Draws one frame of the map canvas. The active floor's materials are cached in an
 // offscreen raster; annotations and overlays are drawn on top in map coordinates.
 
-import { COLORS, GRID, MATERIAL, RGB } from '../../core/index.js';
+import { COLORS, GRID, MATERIAL, RGB } from '@pixel-map-lab/core';
 import { state, view, isExploring } from '../state.js';
 import { byId } from '../dom.js';
 import { ctx, viewportSize } from '../viewport.js';

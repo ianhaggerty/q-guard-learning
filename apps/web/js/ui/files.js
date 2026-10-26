@@ -2,7 +2,7 @@
 
 import {
   GRID, MAX_MAP_SIZE, MIN_MAP_SIZE, World, createBlankMap, decodeMap, encodeMap, materialsFromRGBA, normalizeMap, toRGBA,
-} from '../core/index.js';
+} from '@pixel-map-lab/core';
 import { state, isExploring } from './state.js';
 import { byId, toast } from './dom.js';
 import { loadMap } from './document.js';

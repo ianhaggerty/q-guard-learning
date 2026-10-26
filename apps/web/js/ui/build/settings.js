@@ -1,6 +1,6 @@
 // Brush size and the map name (the sidebar's settings section).
 
-import { GRID } from '../../core/index.js';
+import { GRID } from '@pixel-map-lab/core';
 import { state } from '../state.js';
 import { byId } from '../dom.js';
 import { scheduleSave } from '../autosave.js';

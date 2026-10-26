@@ -1,6 +1,6 @@
 // The map canvas: device-pixel sizing, zoom, fit, and screen ↔ map coordinates.
 
-import { brushBounds } from '../core/index.js';
+import { brushBounds } from '@pixel-map-lab/core';
 import { state, view, invalidateRaster, isExploring } from './state.js';
 import { byId } from './dom.js';
 

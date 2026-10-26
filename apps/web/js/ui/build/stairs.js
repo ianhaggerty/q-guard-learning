@@ -3,7 +3,7 @@
 import {
   STAIR_FLIGHT_LENGTH, STAIR_FLIGHT_WIDTH, STAIR_LANDING_DEPTH, STAIR_RETURN_WIDTH, WALL_THICKNESS,
   addStair, connectsFloor, removeStair, snap, stairContains, validateStair,
-} from '../../core/index.js';
+} from '@pixel-map-lab/core';
 import { state, clearSelections, invalidateRaster, isExploring } from '../state.js';
 import { byId, replaceOptions, toast } from '../dom.js';
 import { commitEdit, rememberForUndo } from '../document.js';

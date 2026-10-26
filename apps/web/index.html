@@ -286,6 +286,8 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<!-- The simulation core lives in packages/core; the dev server and the web build both serve it at js/core/. -->
+<script type="importmap">{ "imports": { "@pixel-map-lab/core": "./js/core/index.js" } }</script>
 <script type="module" src="js/ui/main.js"></script>
 </body>
 </html>

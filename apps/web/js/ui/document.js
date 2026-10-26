@@ -1,7 +1,7 @@
 // The map being edited: committing edits, replacing the whole map, and undo/redo.
 // Undo snapshots cover the entire building (every floor, stair, chair, start and value).
 
-import { alignGrid, cloneMap, normalizeMap, pruneChairs } from '../core/index.js';
+import { alignGrid, cloneMap, normalizeMap, pruneChairs } from '@pixel-map-lab/core';
 import { state, view, clearSelections, invalidateRaster, isExploring } from './state.js';
 import { byId } from './dom.js';
 import { scheduleSave } from './autosave.js';

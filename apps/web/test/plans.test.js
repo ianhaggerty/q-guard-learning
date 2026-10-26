@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { World, alignGrid, decodeMap, isGridAligned } from '../../../packages/core/src/index.js';
+import { World, alignGrid, decodeMap, isGridAligned } from '@pixel-map-lab/core';
 
 const PLANS_FOLDER = new URL('../plans/', import.meta.url);
 const readPlan = name => JSON.parse(readFileSync(new URL(encodeURIComponent(name), PLANS_FOLDER), 'utf8'));

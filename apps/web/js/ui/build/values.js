@@ -1,6 +1,6 @@
 // The Set values tool: drag a cell-aligned rectangle, then apply or reset a pixel value.
 
-import { assignValue, selectionRect, valueSummary } from '../../core/index.js';
+import { assignValue, selectionRect, valueSummary } from '@pixel-map-lab/core';
 import { state, isExploring } from '../state.js';
 import { byId, toast } from '../dom.js';
 import { commitEdit, rememberForUndo } from '../document.js';
