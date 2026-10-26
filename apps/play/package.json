@@ -1,0 +1,14 @@
+{
+  "name": "@pixel-map-lab/play",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser client for multiplayer rooms: lobby and live room view",
+  "type": "module",
+  "dependencies": {
+    "@pixel-map-lab/core": "1.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
