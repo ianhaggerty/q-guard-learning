@@ -25,4 +25,5 @@ export { FIELD_OF_VIEW, DETECTION_PEAK, DETECTION_HALF_RANGE, detectionChance } 
 export { BODY_MASS_KG, ACTIVITIES, EnergyTracker, kcalPerMinute } from './energy.js';
 export { EVENT_RATE, EventSimulation } from './events.js';
 export { ProbabilityField, updateUnresolvedMean } from './probability.js';
+export { Explorer } from './explorer.js';
 export { World } from './world.js';
