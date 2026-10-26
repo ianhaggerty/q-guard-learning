@@ -11,12 +11,15 @@
   "workspaces": [
     "packages/core",
     "apps/web",
+    "apps/play",
     "services/api",
     "services/room-server"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "start": "node scripts/serve.js",
-    "build:web": "npm run build -w apps/web"
+    "start": "node scripts/dev.js",
+    "serve": "node scripts/serve.js",
+    "build:web": "npm run build -w apps/web",
+    "build:play": "npm run build -w apps/play"
   }
 }

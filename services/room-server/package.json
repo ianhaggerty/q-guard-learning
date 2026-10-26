@@ -6,9 +6,11 @@
   "description": "Authoritative multiplayer rooms running the shared simulation core",
   "type": "module",
   "dependencies": {
-    "@pixel-map-lab/core": "1.0.0"
+    "@pixel-map-lab/core": "1.0.0",
+    "ws": "8.22.0"
   },
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
   }
 }

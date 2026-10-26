@@ -1,9 +1,14 @@
-# One host: the client at /, the API at /api, room WebSockets at /rooms. Overlays set the host
-# and TLS. Phase 5 routes /rooms to the specific game server holding a room.
+# One host: the clients at / and /play/, the API at /api, room WebSockets at /rooms. Overlays
+# set the host and TLS. Phase 5 routes /rooms to the specific game server holding a room.
+# Room connections stay open for a whole session, so idle timeouts are raised (the server
+# pings every 15 s); the annotations are for ingress-nginx and ignored by other controllers.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: pixel-map-lab
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   rules:
     - http:

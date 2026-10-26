@@ -10,7 +10,8 @@ agents patrol one map together, and people fine-tune agents from their own play.
 |---|---|
 | `packages/core/` | `@pixel-map-lab/core`: the simulation (maps, movement, detection, events). No DOM; shared by the browser client and the game servers. |
 | `apps/web/` | The browser client: editor and Explore mode. Imports the core as `@pixel-map-lab/core` through an import map. |
-| `services/room-server/` | Authoritative multiplayer rooms on the shared core (Node). Probes only so far. |
+| `apps/play/` | The multiplayer client: a lobby for starting or joining a room on one of the seven plans, and the live room view. |
+| `services/room-server/` | Authoritative multiplayer rooms on the shared core (Node, WebSockets at `/rooms`). A room is destroyed when its last human leaves. |
 | `services/api/` | Accounts, lobby, plans, agents and fine-tuning jobs (Node). Probes only so far. |
 | `services/agent-inference/` | Serves guard-agent actions to room servers (Python, guardrl). Probes only so far. |
 | `services/trainer/` | Fine-tuning job entry point: `guardrl.train` sized to the container's CPU allowance. |
@@ -22,11 +23,16 @@ agents patrol one map together, and people fine-tune agents from their own play.
 ## Develop
 
 ```bash
-npm install          # links the workspaces; there are no third-party dependencies
-npm start            # client at http://127.0.0.1:8941/ (serves packages/core at js/core/)
-npm test             # core and plan tests
-npm run build:web    # static site in apps/web/build/
+npm install          # links the workspaces (the room server's one dependency is ws)
+npm start            # room server on :8942, editor at http://127.0.0.1:8941/, multiplayer at /play/
+npm test             # every workspace's tests
+npm run build:web    # static editor in apps/web/build/ (build:play for apps/play/build/)
+npm run bench -w packages/core   # simulation cost per room tick
 ```
+
+Every browser tab that opens `/play/` is a session with its own id; closing the tab ends
+it. The dev server passes `/rooms` WebSocket connections through to the room server, as
+the production ingress does.
 
 Python services install the simulator as a package: `pip install ./artifacts`.
 
@@ -42,7 +48,9 @@ docker build -f deploy/docker/guardrl.Dockerfile --target trainer -t pml/trainer
 kubectl apply -k deploy/k8s/overlays/dev     # after tagging the images :dev and `kind load`-ing them
 ```
 
-The guardrl images compile every numba kernel at build time (`python -m guardrl.warmup`), so
+The web image serves the editor at `/` and the multiplayer client at `/play/`. The room
+server runs as a single replica until rooms can be routed to the pod that holds them
+(phase 5). The guardrl images compile every numba kernel at build time (`python -m guardrl.warmup`), so
 pods start without the JIT delay. Production expects three node pools, selected by the
 `pixel-map-lab/pool` label: `realtime` for room servers, `general` for the web, API and
 inference, and `batch` (spot) for training jobs.
