@@ -90,10 +90,16 @@ test('room and server limits', () => {
   assert.match(s2.last('error').message, /shutting down/);
 });
 
-/** A fake agent service: records requests and answers with `reply` (or rejects when it throws). */
-function fakeAgents(reply) {
-  const requests = [];
-  return { requests, act: async request => { requests.push(request); return reply(request); } };
+/** A fake agent service: records calls and answers act() with `reply` (or rejects when it throws). */
+function fakeAgents(reply = request => request.agents.map(() => [0, 0, 0])) {
+  const requests = [], demos = [], resets = [], forgotten = [];
+  return {
+    requests, demos, resets, forgotten,
+    act: async request => { requests.push(request); return reply(request); },
+    demonstrate: async request => { demos.push(request); return { demos: demos.length, updates: 2 * demos.length, blend: request.blend }; },
+    reset: async (player, plan) => { resets.push([player, plan]); return {}; },
+    forget: async player => { forgotten.push(player); return {}; },
+  };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -155,4 +161,101 @@ test('heatmaps go only to the players who asked, twice a second', () => {
   lobby.handle(a, { type: 'heatmap', on: false });
   for (let tick = 0; tick < 20; tick++) lobby.tick();
   assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+});
+
+test('a player who leaves while their agent drives leaves it playing, and gets it back on rejoining', async () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const [socket, watcherSocket] = [fakeSocket(), fakeSocket()];
+  const human = lobby.connect(socket);
+  lobby.connect(watcherSocket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  const room = human.room;
+  lobby.handle(human, { type: 'autopilot', on: true });
+  lobby.handle(human, { type: 'leave' });
+  assert.ok(socket.last('left'));
+  assert.equal(lobby.rooms.size, 1, 'the room lives on with the agent');
+  const [listed] = watcherSocket.last('rooms').rooms;
+  assert.deepEqual([listed.humans, listed.agents, listed.explorers], [0, 1, 1]);
+  assert.deepEqual(socket.last('agents').agents, [{ plan: '2', planName: 'Simple Centre', room: room.id }]);
+  const statesBefore = socket.sent.filter(m => m.type === 'state').length;
+  for (let tick = 0; tick < 4; tick++) lobby.tick();
+  assert.equal(socket.sent.filter(m => m.type === 'state').length, statesBefore, 'no snapshots while away');
+  assert.equal(room.snapshot().explorers[0].away, true);
+
+  lobby.handle(human, { type: 'join', room: room.id });
+  assert.equal(socket.last('joined').you.autopilot, true, 'back in agent mode');
+  assert.deepEqual(socket.last('agents').agents, []);
+  assert.equal(room.members.size, 1);
+});
+
+test('one agent per map per player: joining another room on that map withdraws it', () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  const first = human.room;
+  lobby.handle(human, { type: 'autopilot', on: true });
+  lobby.handle(human, { type: 'leave' });
+  lobby.handle(human, { type: 'create', plan: '3' }); // another map: the agent keeps playing
+  assert.ok(lobby.rooms.has(first.id));
+  lobby.handle(human, { type: 'leave' });
+  lobby.handle(human, { type: 'create', plan: '2' }); // same map: the agent moves here with them
+  assert.equal(lobby.rooms.has(first.id), false);
+  assert.equal(human.room.members.size, 1);
+});
+
+test('closing the tab stops every agent of the player and forgets their models', async () => {
+  const agents = fakeAgents();
+  const lobby = lobbyWith({ agents });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  for (const plan of ['2', '3']) {
+    lobby.handle(human, { type: 'create', plan });
+    lobby.handle(human, { type: 'autopilot', on: true });
+    lobby.handle(human, { type: 'leave' });
+  }
+  assert.equal(lobby.rooms.size, 2);
+  lobby.disconnect(human);
+  assert.equal(lobby.rooms.size, 0);
+  await settle();
+  assert.deepEqual(agents.forgotten, [human.id]);
+});
+
+test('playing by hand with fine-tuning on sends demonstrations and reports progress; reset discards it', async () => {
+  const agents = fakeAgents();
+  const lobby = lobbyWith({ agents });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  assert.deepEqual(socket.last('joined').you, { autopilot: false, tuning: false, agent: { demos: 0, updates: 0 } });
+  lobby.handle(human, { type: 'blend', value: 0.8 });
+  lobby.handle(human, { type: 'tuning', on: true });
+  lobby.handle(human, { type: 'input', move: [1, 0], gait: 'run', look: 'right' });
+  for (let tick = 0; tick < 30; tick++) lobby.tick();
+  await settle();
+  assert.ok(agents.demos.length >= 1);
+  const [demo] = agents.demos;
+  assert.deepEqual([demo.plan, demo.player, demo.agent, demo.blend], ['2', human.id, 0, 0.8]);
+  assert.deepEqual(demo.action, [1, 1, 2]);
+  assert.equal(socket.last('tuning').demos, agents.demos.length);
+
+  lobby.handle(human, { type: 'autopilot', on: true });
+  const sent = agents.demos.length;
+  for (let tick = 0; tick < 30; tick++) lobby.tick();
+  await settle();
+  assert.equal(agents.demos.length, sent, 'no teaching while the agent drives');
+
+  lobby.handle(human, { type: 'resetAgent' });
+  await settle();
+  assert.deepEqual(agents.resets, [[human.id, '2']]);
+  assert.deepEqual(socket.last('tuning'), { type: 'tuning', plan: '2', demos: 0, updates: 0 });
+});
+
+test('fine-tuning needs the agent service, and blends must be numbers', () => {
+  const lobby = lobbyWith();
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  lobby.handle(human, { type: 'tuning', on: true });
+  assert.match(socket.last('error').message, /not available/);
+  lobby.handle(human, { type: 'blend', value: 'lots' });
+  assert.match(socket.last('error').message, /number/);
+  lobby.handle(human, { type: 'blend', value: 7 });
+  assert.equal(human.blend, 1);
 });

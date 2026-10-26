@@ -1,7 +1,13 @@
 // Sessions and rooms. A session is one browser tab's connection: it gets a fresh unique
 // id when it connects and ends when the connection closes. A session is in the lobby or
 // in one room. Anyone in the lobby can create a room from one of the plans or join an
-// existing room; when the last human leaves a room, the room is destroyed.
+// existing room.
+//
+// Each player has their own agent for each map. A player who leaves a room while their
+// agent drives leaves it playing there; rejoining that room hands them back their explorer,
+// and joining another room on the same map withdraws it (one agent per map per player).
+// When a tab closes, all of its agents stop and its fine-tuned models are discarded. A room
+// is destroyed when nobody, person or agent, is left in it.
 //
 // Messages are JSON objects with a `type`. From clients:
 //   { type: 'create', plan }      create a room from a plan id and join it
@@ -11,10 +17,16 @@
 //   { type: 'sit' }               sit down, or stand up
 //   { type: 'autopilot', on }     hand the explorer to a pretrained agent, or take it back
 //   { type: 'heatmap', on }       receive the room's probability field (a cheat)
+//   { type: 'tuning', on }        while playing by hand, teach this map's agent
+//   { type: 'blend', value }      0 = the agent stays as pretrained ... 1 = it copies the player
+//   { type: 'resetAgent' }        discard this map's fine-tuned agent
 // To clients:
 //   { type: 'welcome', session: { id, name }, plans, rooms, autopilot }   autopilot: whether it is available
 //   { type: 'rooms', rooms }      the room list changed (sent to sessions in the lobby)
-//   { type: 'joined', room, plan, map }   now in `room`; `map` is the plan file to draw
+//   { type: 'agents', agents }    rooms where this player's agents play on without them
+//   { type: 'joined', room, map, you }   now in `room`; `map` is the plan file to draw;
+//                                 `you`: { autopilot, tuning, agent } (agent: teaching status)
+//   { type: 'tuning', plan, demos, updates }   how far this player's agent has been taught
 //   { type: 'state', ... }        a room snapshot (see Room.snapshot)
 //   { type: 'heat', ... }         the probability field, for sessions that asked (see Room.heat)
 //   { type: 'left' }              back in the lobby
@@ -25,6 +37,9 @@ import { DECISION_EVERY, HEAT_EVERY, Room, SNAPSHOT_EVERY, parseInput } from './
 
 /** A client whose unsent data passes this is too slow to keep up; it skips snapshots until it catches up. */
 const MAX_BUFFERED_BYTES = 1 << 20;
+
+/** Teaching status for a map nobody has taught yet. */
+const UNTAUGHT = { demos: 0, updates: 0 };
 
 export class Lobby {
   /**
@@ -49,7 +64,13 @@ export class Lobby {
   /** A new session for `socket` (anything with send(string) and readyState/bufferedAmount). */
   connect(socket) {
     const id = randomUUID();
-    const session = { id, name: `Guest ${id.slice(0, 4)}`, socket, room: null, heatmap: false };
+    const session = {
+      id, name: `Guest ${id.slice(0, 4)}`, socket, room: null, heatmap: false,
+      agents: new Map(), // plan id → room where this player's agent plays on without them
+      taught: new Map(), // plan id → teaching status
+      blend: 0.5,
+      teachFailing: false,
+    };
     this.sessions.add(session);
     send(session, {
       type: 'welcome',
@@ -61,10 +82,14 @@ export class Lobby {
     return session;
   }
 
-  /** The tab closed or the connection dropped: the session ends and leaves its room. */
+  /** The tab closed or the connection dropped: the session ends, and every agent of theirs with it. */
   disconnect(session) {
-    this.leaveRoom(session);
+    this.leaveRoom(session, { keepAgent: false });
+    for (const room of session.agents.values()) this.removeFrom(room, session);
+    session.agents.clear();
     this.sessions.delete(session);
+    this.broadcastRooms();
+    this.agents?.forget(session.id).catch(() => {});
   }
 
   /** Handle one parsed message from `session`. */
@@ -89,6 +114,14 @@ export class Lobby {
         session.heatmap = Boolean(message.on);
         if (session.heatmap && session.room) send(session, session.room.heat());
         return;
+      case 'tuning':
+        if (!this.agents) return send(session, { type: 'error', message: 'Fine-tuning is not available on this server.' });
+        return session.room?.setTuning(session, Boolean(message.on));
+      case 'blend':
+        if (!Number.isFinite(message.value)) return send(session, { type: 'error', message: 'The blend must be a number from 0 to 1.' });
+        session.blend = Math.min(1, Math.max(0, message.value));
+        return;
+      case 'resetAgent': return this.resetAgent(session);
       default: return send(session, { type: 'error', message: 'Unknown message.' });
     }
   }
@@ -111,35 +144,101 @@ export class Lobby {
     const room = typeof roomId === 'string' && this.rooms.get(roomId);
     if (!room) return send(session, { type: 'error', message: 'That room has closed.' });
     if (room === session.room) return;
-    if (room.full) return send(session, { type: 'error', message: 'That room is full.' });
+    if (room.full && !room.members.has(session)) return send(session, { type: 'error', message: 'That room is full.' });
     this.enter(session, room);
   }
 
   enter(session, room) {
     this.leaveRoom(session);
+    // One agent per map per player: an agent of theirs playing elsewhere on this map stops.
+    const elsewhere = session.agents.get(room.plan.id);
+    if (elsewhere && elsewhere !== room) this.removeFrom(elsewhere, session);
+    session.agents.delete(room.plan.id);
     room.addMember(session);
     session.room = room;
-    send(session, { type: 'joined', room: { id: room.id, plan: room.plan.id, planName: room.plan.name }, map: room.plan.saved });
+    const member = room.members.get(session);
+    send(session, {
+      type: 'joined',
+      room: { id: room.id, plan: room.plan.id, planName: room.plan.name },
+      map: room.plan.saved,
+      you: { autopilot: member.autopilot, tuning: member.tuning, agent: session.taught.get(room.plan.id) ?? UNTAUGHT },
+    });
     send(session, room.snapshot());
     this.broadcastRooms();
+    this.sendAgents(session);
   }
 
-  /** Take `session` out of its room, destroying the room if it is now empty. Returns whether it was in one. */
-  leaveRoom(session) {
+  /**
+   * Take `session` out of its room. If their agent is driving, it plays on without them
+   * (unless keepAgent is false). Returns whether they were in a room.
+   */
+  leaveRoom(session, { keepAgent = true } = {}) {
     const room = session.room;
     if (!room) return false;
-    room.removeMember(session);
     session.room = null;
-    if (!room.humans) this.rooms.delete(room.id);
+    if (keepAgent && room.members.get(session)?.autopilot) {
+      room.detachMember(session);
+      session.agents.set(room.plan.id, room);
+      this.sendAgents(session);
+    } else {
+      this.removeFrom(room, session);
+    }
     this.broadcastRooms();
     return true;
+  }
+
+  /** Remove the session's explorer from `room`, destroying the room if nobody is left. */
+  removeFrom(room, session) {
+    room.removeMember(session);
+    if (!room.members.size) this.rooms.delete(room.id);
   }
 
   roomList() {
     return [...this.rooms.values()].map(room => ({
       id: room.id, plan: room.plan.id, planName: room.plan.name,
-      humans: room.humans, maxHumans: room.maxHumans, createdAt: room.createdAt,
+      humans: room.humans, agents: room.agents, explorers: room.members.size, maxHumans: room.maxHumans,
+      createdAt: room.createdAt,
     }));
+  }
+
+  /** Tell a player where their agents are playing without them. */
+  sendAgents(session) {
+    send(session, {
+      type: 'agents',
+      agents: [...session.agents].map(([plan, room]) => ({ plan, planName: room.plan.name, room: room.id })),
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Teaching
+
+  /** Discard the player's fine-tuned agent for the map of the room they are in. */
+  resetAgent(session) {
+    const room = session.room;
+    if (!room || !this.agents) return;
+    session.taught.delete(room.plan.id);
+    this.agents.reset(session.id, room.plan.id).catch(() => {});
+    send(session, { type: 'tuning', plan: room.plan.id, ...UNTAUGHT });
+  }
+
+  /** Send the room's due demonstrations to the agent service and tell each player how far it has got. */
+  teach(room) {
+    for (const { session, demo } of room.takeLessons()) {
+      Promise.resolve()
+        .then(() => this.agents.demonstrate({ ...demo, blend: session.blend }))
+        .then(status => {
+          session.teachFailing = false;
+          if (!this.sessions.has(session)) return;
+          const taught = { demos: status.demos, updates: status.updates };
+          session.taught.set(demo.plan, taught);
+          send(session, { type: 'tuning', plan: demo.plan, ...taught });
+        })
+        .catch(() => {
+          if (session.teachFailing) return;
+          session.teachFailing = true;
+          send(session, { type: 'error', message: 'Your agent cannot learn right now; it will keep trying.' });
+        });
+    }
   }
 
   /** Tell every session in the lobby about the current rooms. */
@@ -155,18 +254,21 @@ export class Lobby {
   tick() {
     for (const room of this.rooms.values()) {
       room.step();
-      if (room.tick % DECISION_EVERY === 0) this.decide(room);
+      if (room.tick % DECISION_EVERY === 0) {
+        this.decide(room);
+        if (this.agents) this.teach(room);
+      }
       if (room.tick % SNAPSHOT_EVERY === 0) this.broadcast(room, JSON.stringify(room.snapshot()), () => true);
       if (room.tick % HEAT_EVERY === 0) {
         const watching = session => session.heatmap;
-        if ([...room.members.keys()].some(watching)) this.broadcast(room, JSON.stringify(room.heat()), watching);
+        if (room.present.some(watching)) this.broadcast(room, JSON.stringify(room.heat()), watching);
       }
     }
   }
 
-  /** Send `text` to the room's members that `wanted` picks, skipping clients too far behind. */
+  /** Send `text` to the people in the room that `wanted` picks, skipping clients too far behind. */
   broadcast(room, text, wanted) {
-    for (const session of room.members.keys()) {
+    for (const session of room.present) {
       if (wanted(session) && session.socket.bufferedAmount <= MAX_BUFFERED_BYTES) sendRaw(session, text);
     }
   }
@@ -194,7 +296,7 @@ export class Lobby {
         if (room.agentFailing) return;
         room.agentFailing = true;
         for (const [session, member] of room.members) {
-          if (member.autopilot) send(session, { type: 'error', message: 'The autopilot cannot decide right now; it will keep trying.' });
+          if (member.autopilot && member.present) send(session, { type: 'error', message: 'The autopilot cannot decide right now; it will keep trying.' });
         }
       })
       .finally(() => { room.deciding = false; });

@@ -22,14 +22,26 @@ export function showPlans(list, plans, onCreate) {
   list.replaceChildren(...plans.map(plan => item(plan.name, `Map ${plan.id}`, 'Start room', () => onCreate(plan.id))));
 }
 
+/** Who is in a room: people, and agents playing on for players who left. */
+function occupants(room) {
+  const people = `${room.humans} ${room.humans === 1 ? 'person' : 'people'}`;
+  return room.agents ? `${people} · ${room.agents} agent${room.agents === 1 ? '' : 's'}` : people;
+}
+
 export function showRooms(list, empty, rooms, onJoin) {
   const newest = [...rooms].sort((a, b) => b.createdAt - a.createdAt);
   list.replaceChildren(...newest.map(room => item(
     room.planName,
-    `Room ${room.id} · ${room.humans} of ${room.maxHumans} playing`,
-    room.humans >= room.maxHumans ? 'Full' : 'Join',
+    `Room ${room.id} · ${occupants(room)} · ${room.explorers} of ${room.maxHumans} places`,
+    room.explorers >= room.maxHumans ? 'Full' : 'Join',
     () => onJoin(room.id),
-    room.humans >= room.maxHumans,
+    room.explorers >= room.maxHumans,
   )));
   empty.hidden = rooms.length > 0;
+}
+
+/** The rooms where this player's agents play on without them. */
+export function showAgents(panel, list, agents, onRejoin) {
+  list.replaceChildren(...agents.map(agent => item(agent.planName, `Room ${agent.room} · your agent is playing`, 'Rejoin', () => onRejoin(agent.room))));
+  panel.hidden = agents.length === 0;
 }

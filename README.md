@@ -10,10 +10,10 @@ agents patrol one map together, and people fine-tune agents from their own play.
 |---|---|
 | `packages/core/` | `@pixel-map-lab/core`: the simulation (maps, movement, detection, events). No DOM; shared by the browser client and the game servers. |
 | `apps/web/` | The browser client: editor and Explore mode. Imports the core as `@pixel-map-lab/core` through an import map. |
-| `apps/play/` | The multiplayer client: a lobby for starting or joining a room on one of the seven plans, and the live room view, with an autopilot toggle and a heatmap cheat. |
+| `apps/play/` | The multiplayer client: a lobby for starting or joining a room on one of the seven plans, and the live room view, with each player's own agent and a heatmap cheat. |
 | `services/room-server/` | Authoritative multiplayer rooms on the shared core (Node, WebSockets at `/rooms`). A room is destroyed when its last human leaves. |
 | `services/api/` | Accounts, lobby, plans, agents and fine-tuning jobs (Node). Probes only so far. |
-| `services/agent-inference/` | Guard-agent decisions from the pretrained checkpoints for players who hand their explorer to the autopilot (Python, guardrl). |
+| `services/agent-inference/` | Guard-agent decisions for players who hand their explorer to their agent, and live fine-tuning of each player's agent from their play (Python, guardrl). |
 | `services/trainer/` | Fine-tuning job entry point: `guardrl.train` sized to the container's CPU allowance. |
 | `artifacts/` | Research bundle: the `guardrl` numba simulator and DQN learner, trained models, plans, training configs. See `artifacts/README.md`. |
 | `deploy/docker/` | Container images, all built from the repository root. |
@@ -32,8 +32,12 @@ npm run bench -w packages/core   # simulation cost per room tick
 ```
 
 Every browser tab that opens `/play/` is a session with its own id; closing the tab ends
-it. In a room, "Let the agent drive" hands the explorer to a guard agent trained on that
-map (the checkpoints in `artifacts/final_models`), and "Show heatmap" reveals where
+it. Each player has their own agent per map, starting from the guard agent trained on that
+map (the checkpoints in `artifacts/final_models`). "Let your agent drive" hands it the
+explorer; while driving by hand, "Fine-tune while I play" teaches it from the player's
+play, and "Copies me" sets how closely it follows them rather than its training. An agent
+left driving keeps playing after its player leaves the room, until they return or close
+the tab, which also discards their fine-tuned agents. "Show heatmap" reveals where
 unspotted events are likely to be. The agent service needs Python with numpy, numba and
 torch (`PYTHON`, default `python3`); without it, or with `AGENTS=off`, rooms still work. The dev server passes `/rooms` WebSocket connections through to the room server, as
 the production ingress does.
