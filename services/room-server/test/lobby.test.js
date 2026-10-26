@@ -91,7 +91,7 @@ test('room and server limits', () => {
 });
 
 /** A fake agent service: records requests and answers with `reply` (or rejects when it throws). */
-function fakeAgents(reply) {
+function fakeAgents(reply = request => request.agents.map(() => [0, 0, 0])) {
   const requests = [];
   return { requests, act: async request => { requests.push(request); return reply(request); } };
 }
@@ -155,4 +155,58 @@ test('heatmaps go only to the players who asked, twice a second', () => {
   lobby.handle(a, { type: 'heatmap', on: false });
   for (let tick = 0; tick < 20; tick++) lobby.tick();
   assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+});
+
+test('a player who leaves while their agent drives leaves it playing, and gets it back on rejoining', async () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const [socket, watcherSocket] = [fakeSocket(), fakeSocket()];
+  const human = lobby.connect(socket);
+  lobby.connect(watcherSocket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  const room = human.room;
+  lobby.handle(human, { type: 'autopilot', on: true });
+  lobby.handle(human, { type: 'leave' });
+  assert.ok(socket.last('left'));
+  assert.equal(lobby.rooms.size, 1, 'the room lives on with the agent');
+  const [listed] = watcherSocket.last('rooms').rooms;
+  assert.deepEqual([listed.humans, listed.agents, listed.explorers], [0, 1, 1]);
+  assert.deepEqual(socket.last('agents').agents, [{ plan: '2', planName: 'Simple Centre', room: room.id }]);
+  const statesBefore = socket.sent.filter(m => m.type === 'state').length;
+  for (let tick = 0; tick < 4; tick++) lobby.tick();
+  assert.equal(socket.sent.filter(m => m.type === 'state').length, statesBefore, 'no snapshots while away');
+  assert.equal(room.snapshot().explorers[0].away, true);
+
+  lobby.handle(human, { type: 'join', room: room.id });
+  assert.equal(socket.last('joined').you.autopilot, true, 'back in agent mode');
+  assert.deepEqual(socket.last('agents').agents, []);
+  assert.equal(room.members.size, 1);
+});
+
+test('one agent per map per player: joining another room on that map withdraws it', () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  lobby.handle(human, { type: 'create', plan: '2' });
+  const first = human.room;
+  lobby.handle(human, { type: 'autopilot', on: true });
+  lobby.handle(human, { type: 'leave' });
+  lobby.handle(human, { type: 'create', plan: '3' }); // another map: the agent keeps playing
+  assert.ok(lobby.rooms.has(first.id));
+  lobby.handle(human, { type: 'leave' });
+  lobby.handle(human, { type: 'create', plan: '2' }); // same map: the agent moves here with them
+  assert.equal(lobby.rooms.has(first.id), false);
+  assert.equal(human.room.members.size, 1);
+});
+
+test('closing the tab stops every agent of the player', () => {
+  const agents = fakeAgents();
+  const lobby = lobbyWith({ agents });
+  const socket = fakeSocket(), human = lobby.connect(socket);
+  for (const plan of ['2', '3']) {
+    lobby.handle(human, { type: 'create', plan });
+    lobby.handle(human, { type: 'autopilot', on: true });
+    lobby.handle(human, { type: 'leave' });
+  }
+  assert.equal(lobby.rooms.size, 2);
+  lobby.disconnect(human);
+  assert.equal(lobby.rooms.size, 0);
 });

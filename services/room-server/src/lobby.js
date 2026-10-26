@@ -1,7 +1,12 @@
 // Sessions and rooms. A session is one browser tab's connection: it gets a fresh unique
 // id when it connects and ends when the connection closes. A session is in the lobby or
 // in one room. Anyone in the lobby can create a room from one of the plans or join an
-// existing room; when the last human leaves a room, the room is destroyed.
+// existing room.
+//
+// A player who leaves a room while their agent drives leaves it playing there; rejoining
+// that room hands them back their explorer, and joining another room on the same map
+// withdraws it (one agent per map per player). When a tab closes, all of its agents stop.
+// A room is destroyed when nobody, person or agent, is left in it.
 //
 // Messages are JSON objects with a `type`. From clients:
 //   { type: 'create', plan }      create a room from a plan id and join it
@@ -14,7 +19,9 @@
 // To clients:
 //   { type: 'welcome', session: { id, name }, plans, rooms, autopilot }   autopilot: whether it is available
 //   { type: 'rooms', rooms }      the room list changed (sent to sessions in the lobby)
-//   { type: 'joined', room, plan, map }   now in `room`; `map` is the plan file to draw
+//   { type: 'agents', agents }    rooms where this player's agents play on without them
+//   { type: 'joined', room, map, you }   now in `room`; `map` is the plan file to draw;
+//                                 `you`: { autopilot }
 //   { type: 'state', ... }        a room snapshot (see Room.snapshot)
 //   { type: 'heat', ... }         the probability field, for sessions that asked (see Room.heat)
 //   { type: 'left' }              back in the lobby
@@ -49,7 +56,10 @@ export class Lobby {
   /** A new session for `socket` (anything with send(string) and readyState/bufferedAmount). */
   connect(socket) {
     const id = randomUUID();
-    const session = { id, name: `Guest ${id.slice(0, 4)}`, socket, room: null, heatmap: false };
+    const session = {
+      id, name: `Guest ${id.slice(0, 4)}`, socket, room: null, heatmap: false,
+      agents: new Map(), // plan id → room where this player's agent plays on without them
+    };
     this.sessions.add(session);
     send(session, {
       type: 'welcome',
@@ -61,10 +71,13 @@ export class Lobby {
     return session;
   }
 
-  /** The tab closed or the connection dropped: the session ends and leaves its room. */
+  /** The tab closed or the connection dropped: the session ends, and every agent of theirs with it. */
   disconnect(session) {
-    this.leaveRoom(session);
+    this.leaveRoom(session, { keepAgent: false });
+    for (const room of session.agents.values()) this.removeFrom(room, session);
+    session.agents.clear();
     this.sessions.delete(session);
+    this.broadcastRooms();
   }
 
   /** Handle one parsed message from `session`. */
@@ -111,35 +124,69 @@ export class Lobby {
     const room = typeof roomId === 'string' && this.rooms.get(roomId);
     if (!room) return send(session, { type: 'error', message: 'That room has closed.' });
     if (room === session.room) return;
-    if (room.full) return send(session, { type: 'error', message: 'That room is full.' });
+    if (room.full && !room.members.has(session)) return send(session, { type: 'error', message: 'That room is full.' });
     this.enter(session, room);
   }
 
   enter(session, room) {
     this.leaveRoom(session);
+    // One agent per map per player: an agent of theirs playing elsewhere on this map stops.
+    const elsewhere = session.agents.get(room.plan.id);
+    if (elsewhere && elsewhere !== room) this.removeFrom(elsewhere, session);
+    session.agents.delete(room.plan.id);
     room.addMember(session);
     session.room = room;
-    send(session, { type: 'joined', room: { id: room.id, plan: room.plan.id, planName: room.plan.name }, map: room.plan.saved });
+    const member = room.members.get(session);
+    send(session, {
+      type: 'joined',
+      room: { id: room.id, plan: room.plan.id, planName: room.plan.name },
+      map: room.plan.saved,
+      you: { autopilot: member.autopilot },
+    });
     send(session, room.snapshot());
     this.broadcastRooms();
+    this.sendAgents(session);
   }
 
-  /** Take `session` out of its room, destroying the room if it is now empty. Returns whether it was in one. */
-  leaveRoom(session) {
+  /**
+   * Take `session` out of its room. If their agent is driving, it plays on without them
+   * (unless keepAgent is false). Returns whether they were in a room.
+   */
+  leaveRoom(session, { keepAgent = true } = {}) {
     const room = session.room;
     if (!room) return false;
-    room.removeMember(session);
     session.room = null;
-    if (!room.humans) this.rooms.delete(room.id);
+    if (keepAgent && room.members.get(session)?.autopilot) {
+      room.detachMember(session);
+      session.agents.set(room.plan.id, room);
+      this.sendAgents(session);
+    } else {
+      this.removeFrom(room, session);
+    }
     this.broadcastRooms();
     return true;
+  }
+
+  /** Remove the session's explorer from `room`, destroying the room if nobody is left. */
+  removeFrom(room, session) {
+    room.removeMember(session);
+    if (!room.members.size) this.rooms.delete(room.id);
   }
 
   roomList() {
     return [...this.rooms.values()].map(room => ({
       id: room.id, plan: room.plan.id, planName: room.plan.name,
-      humans: room.humans, maxHumans: room.maxHumans, createdAt: room.createdAt,
+      humans: room.humans, agents: room.agents, explorers: room.members.size, maxHumans: room.maxHumans,
+      createdAt: room.createdAt,
     }));
+  }
+
+  /** Tell a player where their agents are playing without them. */
+  sendAgents(session) {
+    send(session, {
+      type: 'agents',
+      agents: [...session.agents].map(([plan, room]) => ({ plan, planName: room.plan.name, room: room.id })),
+    });
   }
 
   /** Tell every session in the lobby about the current rooms. */
@@ -159,14 +206,14 @@ export class Lobby {
       if (room.tick % SNAPSHOT_EVERY === 0) this.broadcast(room, JSON.stringify(room.snapshot()), () => true);
       if (room.tick % HEAT_EVERY === 0) {
         const watching = session => session.heatmap;
-        if ([...room.members.keys()].some(watching)) this.broadcast(room, JSON.stringify(room.heat()), watching);
+        if (room.present.some(watching)) this.broadcast(room, JSON.stringify(room.heat()), watching);
       }
     }
   }
 
-  /** Send `text` to the room's members that `wanted` picks, skipping clients too far behind. */
+  /** Send `text` to the people in the room that `wanted` picks, skipping clients too far behind. */
   broadcast(room, text, wanted) {
-    for (const session of room.members.keys()) {
+    for (const session of room.present) {
       if (wanted(session) && session.socket.bufferedAmount <= MAX_BUFFERED_BYTES) sendRaw(session, text);
     }
   }
@@ -194,7 +241,7 @@ export class Lobby {
         if (room.agentFailing) return;
         room.agentFailing = true;
         for (const [session, member] of room.members) {
-          if (member.autopilot) send(session, { type: 'error', message: 'The autopilot cannot decide right now; it will keep trying.' });
+          if (member.autopilot && member.present) send(session, { type: 'error', message: 'The autopilot cannot decide right now; it will keep trying.' });
         }
       })
       .finally(() => { room.deciding = false; });

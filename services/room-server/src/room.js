@@ -9,7 +9,8 @@
 // (the agents' decision interval in training) the room describes itself in the agent
 // service's terms -- every explorer's pose and the probability field -- and applies the
 // actions that come back, translated from the training action space (move, gait, absolute
-// gaze) into the same controls a person uses.
+// gaze) into the same controls a person uses. A player who leaves while their agent drives
+// leaves it playing; the room lasts while anyone, person or agent, is in it.
 
 import { GRID, LOOK_OFFSETS, World, alignGrid, decodeMap } from '@pixel-map-lab/core';
 
@@ -59,24 +60,44 @@ export class Room {
     this.maxHumans = maxHumans;
     this.createdAt = Date.now();
     this.world = new World(alignGrid(decodeMap(plan.saved)), { empty: true });
-    this.members = new Map(); // session → { explorer, input, sit, autopilot, action }
+    this.members = new Map(); // session → { explorer, present, input, sit, autopilot, action }
     this.joins = 0;
     this.tick = 0;
   }
 
+  /** People in the room now. */
   get humans() {
-    return this.members.size;
+    return [...this.members.values()].filter(member => member.present).length;
   }
 
+  /** Explorers driven by an agent, whether their player is here or not. */
+  get agents() {
+    return [...this.members.values()].filter(member => member.autopilot).length;
+  }
+
+  /** Every explorer takes a place, including agents whose players have left. */
   get full() {
     return this.members.size >= this.maxHumans;
   }
 
-  /** Add an explorer for `session`, cycling through the map's numbered starts. Returns it. */
+  /** The sessions present in the room. */
+  get present() {
+    return [...this.members].filter(([, member]) => member.present).map(([session]) => session);
+  }
+
+  /**
+   * Add an explorer for `session`, cycling through the map's numbered starts, or bring the
+   * player back to the explorer their agent has been driving. Returns the explorer.
+   */
   addMember(session) {
+    const existing = this.members.get(session);
+    if (existing) {
+      existing.present = true;
+      return existing.explorer;
+    }
     const startIndex = this.joins++ % this.world.map.starts.length;
     const explorer = this.world.addExplorer({ startIndex, id: session.id });
-    this.members.set(session, { explorer, input: null, sit: false, autopilot: false, action: null });
+    this.members.set(session, { explorer, present: true, input: null, sit: false, autopilot: false, action: null });
     return explorer;
   }
 
@@ -85,6 +106,15 @@ export class Room {
     if (!member) return;
     this.world.removeExplorer(member.explorer);
     this.members.delete(session);
+  }
+
+  /** The player leaves but their agent plays on. */
+  detachMember(session) {
+    const member = this.members.get(session);
+    if (!member) return;
+    member.present = false;
+    member.input = null;
+    member.sit = false;
   }
 
   /** Keep the latest valid input; it is applied at the next tick. Ignored while the autopilot drives. */
@@ -201,6 +231,7 @@ export class Room {
         credit: Number(explorer.credit.toPrecision(6)),
         kcal: round(explorer.energy.kcal, 3),
         autopilot: this.members.get(session).autopilot,
+        away: !this.members.get(session).present,
       })),
       // For each floor, the indices of its open doors (in groupDoors order).
       doors: world.floorDoors.map(({ doors }) => doors.flatMap((door, index) => (door.open ? [index] : []))),

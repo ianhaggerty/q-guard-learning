@@ -164,3 +164,16 @@ test('the heatmap has one byte per 3 × 3 block per floor and grows where nobody
   const upper = Buffer.from(room.heat().floors[1], 'base64');
   assert.ok(Math.max(...upper) > 0, 'the floor nobody is on warms up');
 });
+
+test('an agent whose player has left keeps its place; the player returns to the same explorer', () => {
+  const room = new Room('r1', plan('2'));
+  const [player, other] = [session('a'), session('b')];
+  const explorer = room.addMember(player);
+  room.addMember(other);
+  room.setAutopilot(player, true);
+  room.detachMember(player);
+  assert.deepEqual([room.humans, room.agents, room.members.size], [1, 1, 2]);
+  assert.deepEqual(room.present, [other]);
+  assert.equal(room.addMember(player), explorer);
+  assert.equal(room.humans, 2);
+});
