@@ -11,12 +11,14 @@ stairs.js, chairs.js, doors.js):
   * the deterministic probability field dm/dt = lambda - mu m, integrated exactly at a
     fixed pose (probability.js), P = 1 - exp(-m), sum P = expected unresolved events.
 
-Extensions for several guards (not present in the single-explorer JS code):
+Rules for several guards (the JS core's World follows the same rules for its explorers):
   * detection hazards of different guards add (independent Poisson detections);
   * a pixel's detection reduction is credited to guards in proportion to their hazard;
-  * a door is open while *any* guard on that floor is within 5 px (line of sight for a
-    guard still uses its own-proximity door state, see plan.py);
+  * a door is open while *any* guard on that floor is within 5 px;
   * a chair can hold one guard; guards do not collide with each other.
+One deliberate difference: line of sight here uses the guard's own-proximity door state
+(precomputed, see plan.py), so a guard cannot see through a door another guard holds open;
+in the JS core an open door is open for everyone.
 
 Nothing here edits the field-of-view or MET assumptions.
 """
