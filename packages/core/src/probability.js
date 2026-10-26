@@ -13,7 +13,7 @@
 
 import { METRES_PER_PIXEL } from './scale.js';
 import { MATERIAL } from './materials.js';
-import { detectionChance, hazardFromChance } from './detection.js';
+import { FIELD_OF_VIEW, detectionChance, hazardFromChance } from './detection.js';
 import { eccentricityDegrees, headingVector } from './facing.js';
 
 /** The closed-form solution of dm/dt = λ − μm over `seconds`, without input checks. */
@@ -32,16 +32,41 @@ export function updateUnresolvedMean(mean, arrivalRate, detectionRate, seconds) 
 
 const SIGHT_UNKNOWN = 0, SIGHT_VISIBLE = 1, SIGHT_HIDDEN = 2;
 
+/**
+ * A point whose direction makes cos(angle) < this with the facing is more than 100° off
+ * centre, where the detection chance is exactly zero. The margin keeps the test conservative.
+ */
+const COS_BEYOND_FIELD_OF_VIEW = Math.cos(FIELD_OF_VIEW * Math.PI / 360) - 1e-9;
+
 export class ProbabilityField {
   constructor(events) {
     this.events = events;
     this.map = events.map;
-    const count = events.candidates.length;
+    const { candidates } = events, count = candidates.length;
     this.means = new Float64Array(count);
     this.hazards = new Float64Array(count); // every explorer's hazard added together
     this.floorSums = new Float64Array(this.map.floors.length);
     this.sum = 0;
     this.elapsed = 0;
+
+    // Candidate geometry, decoded once. Candidates are ordered by floor, so each floor's
+    // candidates are the range floorStart[floor] .. floorStart[floor + 1].
+    const width = this.map.width, floorSize = width * this.map.height;
+    this.candidatePixel = new Int32Array(count);
+    this.candidateX = new Float64Array(count);
+    this.candidateY = new Float64Array(count);
+    this.floorStart = new Int32Array(this.map.floors.length + 1);
+    for (let j = 0; j < count; j++) {
+      const floor = Math.floor(candidates[j] / floorSize), i = candidates[j] % floorSize;
+      this.candidatePixel[j] = i;
+      this.candidateX[j] = i % width + 0.5;
+      this.candidateY[j] = Math.floor(i / width) + 0.5;
+      this.floorStart[floor + 1] = j + 1;
+    }
+    for (let floor = 1; floor < this.floorStart.length; floor++) {
+      this.floorStart[floor] = Math.max(this.floorStart[floor], this.floorStart[floor - 1]);
+    }
+
     // Each explorer's own hazards, recomputed only when something that affects them
     // changes. Line of sight is cached separately and only depends on the explorer's pixel.
     this.views = new Map();
@@ -65,8 +90,9 @@ export class ProbabilityField {
   updateView(explorer, world) {
     let view = this.views.get(explorer);
     if (!view) {
+      // `floor`: the floor whose candidates hold this explorer's nonzero hazards.
       const count = this.events.candidates.length;
-      view = { poseKey: null, sightKey: null, sightCache: new Uint8Array(count), hazards: new Float64Array(count) };
+      view = { poseKey: null, floor: null, sightKey: null, sightCache: new Uint8Array(count), hazards: new Float64Array(count) };
       this.views.set(explorer, view);
     }
     const doorStates = explorer.doors.map(door => +door.open);
@@ -78,25 +104,32 @@ export class ProbabilityField {
     return true;
   }
 
-  /** Recompute each candidate pixel's detection hazard for one explorer's current pose. */
+  /**
+   * Recompute each candidate pixel's detection hazard for one explorer's current pose.
+   * Only the explorer's floor can be seen, so only its candidates are visited.
+   */
   updateHazards(view, explorer, world, doorStates) {
-    const { position, floorIndex } = explorer;
+    const { position, floorIndex } = explorer, { floorStart, candidatePixel, candidateX, candidateY } = this;
     const sightKey = [Math.floor(position.x), Math.floor(position.y), floorIndex, ...doorStates].join(':');
     if (sightKey !== view.sightKey) {
       view.sightKey = sightKey;
       view.sightCache.fill(SIGHT_UNKNOWN);
     }
-    const { candidates } = this.events, width = this.map.width, floorSize = width * this.map.height;
+    if (view.floor !== null && view.floor !== floorIndex) view.hazards.fill(0, floorStart[view.floor], floorStart[view.floor + 1]);
+    view.floor = floorIndex;
     const pixels = this.map.floors[floorIndex].pixels, heading = headingVector(explorer.facing);
-    for (let j = 0; j < candidates.length; j++) {
-      const floor = Math.floor(candidates[j] / floorSize), i = candidates[j] % floorSize;
+    for (let j = floorStart[floorIndex]; j < floorStart[floorIndex + 1]; j++) {
+      const x = candidateX[j], y = candidateY[j];
       let chance = 0;
-      if (floor === floorIndex && pixels[i] === MATERIAL.OPAQUE) {
+      if (pixels[candidatePixel[j]] === MATERIAL.OPAQUE) {
         // Wall surfaces are seen through their neighbours; Explorer handles that rule.
-        chance = explorer.detectionAt(i % width + 0.5, Math.floor(i / width) + 0.5);
-      } else if (floor === floorIndex) {
-        const x = i % width + 0.5, y = Math.floor(i / width) + 0.5;
+        chance = explorer.detectionAt(x, y);
+      } else {
         const dx = x - position.x, dy = y - position.y, distance = Math.hypot(dx, dy);
+        if (dx * heading.x + dy * heading.y < distance * COS_BEYOND_FIELD_OF_VIEW) {
+          view.hazards[j] = 0;
+          continue;
+        }
         const eccentricity = distance ? eccentricityDegrees(dx, dy, heading) : 0;
         chance = detectionChance(distance * METRES_PER_PIXEL, eccentricity, world.detectionHalfRange);
         if (chance > 0) {
