@@ -89,3 +89,19 @@ test('room and server limits', () => {
   lobby.handle(b, { type: 'join', room: a.room.id });
   assert.match(s2.last('error').message, /shutting down/);
 });
+
+test('heatmaps go only to the players who asked, twice a second', () => {
+  const lobby = lobbyWith();
+  const [cheat, honest] = [fakeSocket(), fakeSocket()];
+  const [a, b] = [lobby.connect(cheat), lobby.connect(honest)];
+  lobby.handle(a, { type: 'create', plan: '3' });
+  lobby.handle(b, { type: 'join', room: a.room.id });
+  lobby.handle(a, { type: 'heatmap', on: true });
+  assert.ok(cheat.last('heat'), 'sent at once on asking');
+  for (let tick = 0; tick < 20; tick++) lobby.tick();
+  assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+  assert.equal(honest.sent.filter(m => m.type === 'heat').length, 0);
+  lobby.handle(a, { type: 'heatmap', on: false });
+  for (let tick = 0; tick < 20; tick++) lobby.tick();
+  assert.equal(cheat.sent.filter(m => m.type === 'heat').length, 3);
+});

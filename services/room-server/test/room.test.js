@@ -77,3 +77,18 @@ test('snapshots carry every explorer, open doors per floor and the score', () =>
   assert.ok(snapshot.psum > 0);
   assert.ok(JSON.stringify(snapshot).length < 2000);
 });
+
+test('the heatmap has one byte per 3 × 3 block per floor and grows where nobody looks', () => {
+  const room = new Room('r1', plan('6'));
+  room.addMember(session('a'));
+  const fresh = room.heat();
+  assert.equal(fresh.type, 'heat');
+  assert.equal(fresh.block, 3);
+  assert.equal(fresh.floors.length, 2);
+  const bytes = floor => Buffer.from(fresh.floors[floor], 'base64');
+  assert.equal(bytes(0).length, fresh.width * fresh.height);
+  assert.ok(bytes(0).every(value => value === 0));
+  for (let tick = 0; tick < 1200; tick++) room.step(); // a minute
+  const upper = Buffer.from(room.heat().floors[1], 'base64');
+  assert.ok(Math.max(...upper) > 0, 'the floor nobody is on warms up');
+});

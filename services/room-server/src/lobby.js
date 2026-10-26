@@ -9,16 +9,18 @@
 //   { type: 'leave' }             go back to the lobby
 //   { type: 'input', move: [dx, dy], gait, look }   what this explorer wants to do
 //   { type: 'sit' }               sit down, or stand up
+//   { type: 'heatmap', on }       receive the room's probability field (a cheat)
 // To clients:
 //   { type: 'welcome', session: { id, name }, plans, rooms }
 //   { type: 'rooms', rooms }      the room list changed (sent to sessions in the lobby)
 //   { type: 'joined', room, plan, map }   now in `room`; `map` is the plan file to draw
 //   { type: 'state', ... }        a room snapshot (see Room.snapshot)
+//   { type: 'heat', ... }         the probability field, for sessions that asked (see Room.heat)
 //   { type: 'left' }              back in the lobby
 //   { type: 'error', message }
 
 import { randomBytes, randomUUID } from 'node:crypto';
-import { Room, SNAPSHOT_EVERY, parseInput } from './room.js';
+import { HEAT_EVERY, Room, SNAPSHOT_EVERY, parseInput } from './room.js';
 
 /** A client whose unsent data passes this is too slow to keep up; it skips snapshots until it catches up. */
 const MAX_BUFFERED_BYTES = 1 << 20;
@@ -44,7 +46,7 @@ export class Lobby {
   /** A new session for `socket` (anything with send(string) and readyState/bufferedAmount). */
   connect(socket) {
     const id = randomUUID();
-    const session = { id, name: `Guest ${id.slice(0, 4)}`, socket, room: null };
+    const session = { id, name: `Guest ${id.slice(0, 4)}`, socket, room: null, heatmap: false };
     this.sessions.add(session);
     send(session, {
       type: 'welcome',
@@ -76,6 +78,10 @@ export class Lobby {
         return;
       }
       case 'sit': return session.room?.requestSit(session);
+      case 'heatmap':
+        session.heatmap = Boolean(message.on);
+        if (session.heatmap && session.room) send(session, session.room.heat());
+        return;
       default: return send(session, { type: 'error', message: 'Unknown message.' });
     }
   }
@@ -138,15 +144,22 @@ export class Lobby {
   // -------------------------------------------------------------------------
   // Time
 
-  /** Advance every room by one tick and send snapshots when due. */
+  /** Advance every room by one tick, and send snapshots and heatmaps when due. */
   tick() {
     for (const room of this.rooms.values()) {
       room.step();
-      if (room.tick % SNAPSHOT_EVERY) continue;
-      const snapshot = JSON.stringify(room.snapshot());
-      for (const session of room.members.keys()) {
-        if (session.socket.bufferedAmount <= MAX_BUFFERED_BYTES) sendRaw(session, snapshot);
+      if (room.tick % SNAPSHOT_EVERY === 0) this.broadcast(room, JSON.stringify(room.snapshot()), () => true);
+      if (room.tick % HEAT_EVERY === 0) {
+        const watching = session => session.heatmap;
+        if ([...room.members.keys()].some(watching)) this.broadcast(room, JSON.stringify(room.heat()), watching);
       }
+    }
+  }
+
+  /** Send `text` to the room's members that `wanted` picks, skipping clients too far behind. */
+  broadcast(room, text, wanted) {
+    for (const session of room.members.keys()) {
+      if (wanted(session) && session.socket.bufferedAmount <= MAX_BUFFERED_BYTES) sendRaw(session, text);
     }
   }
 }

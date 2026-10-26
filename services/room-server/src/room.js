@@ -5,13 +5,23 @@
 // The room is authoritative: clients send what they want to do (a direction, a gait, a
 // look, a request to sit or stand) and render the snapshots the room sends back.
 
-import { LOOK_OFFSETS, World, alignGrid, decodeMap } from '@pixel-map-lab/core';
+import { GRID, LOOK_OFFSETS, World, alignGrid, decodeMap } from '@pixel-map-lab/core';
 
 /** Simulated seconds per tick. */
 export const TICK_SECONDS = 0.05;
 
 /** A snapshot goes to the room's members every this many ticks (ten a second). */
 export const SNAPSHOT_EVERY = 2;
+
+/** Heatmaps go to the players who asked for them every this many ticks (twice a second). */
+export const HEAT_EVERY = 10;
+
+/**
+ * Heatmap scale: a block's colour is log(1 + ΣP / reference), where the reference is a 3 × 3
+ * block of value-1 floor left unseen for a minute (the agents' risk reference), and a block
+ * unseen for HEAT_FULL_SECONDS is drawn at full strength.
+ */
+const HEAT_REFERENCE_SECONDS = 60, HEAT_FULL_SECONDS = 600;
 
 const GAITS = new Set(['walk', 'run', 'sprint']);
 const STEPS = new Set([-1, 0, 1]);
@@ -121,5 +131,28 @@ export class Room {
       // Events spotted in the last couple of seconds, for a brief highlight.
       spots: world.events.resolvedFx.map(event => ({ x: event.x, y: event.y, floor: event.floor })),
     };
+  }
+
+  /**
+   * The probability field per floor in GRID × GRID blocks, one byte a block (base64), for
+   * players who chose to see it. Width and height are in blocks.
+   */
+  heat() {
+    const { map, probabilities: field, events } = this.world;
+    const width = Math.ceil(map.width / GRID), height = Math.ceil(map.height / GRID);
+    const sums = map.floors.map(() => new Float64Array(width * height));
+    for (let floor = 0; floor < map.floors.length; floor++) {
+      for (let j = field.floorStart[floor]; j < field.floorStart[floor + 1]; j++) {
+        const block = Math.floor(field.candidateY[j] / GRID) * width + Math.floor(field.candidateX[j] / GRID);
+        sums[floor][block] += -Math.expm1(-field.means[j]);
+      }
+    }
+    const reference = events.rate * GRID * GRID * HEAT_REFERENCE_SECONDS;
+    const full = Math.log1p(HEAT_FULL_SECONDS / HEAT_REFERENCE_SECONDS);
+    const floors = sums.map(blocks => {
+      const bytes = Uint8Array.from(blocks, sum => Math.round(255 * Math.min(1, Math.log1p(sum / reference) / full)));
+      return Buffer.from(bytes).toString('base64');
+    });
+    return { type: 'heat', block: GRID, width, height, floors };
   }
 }
