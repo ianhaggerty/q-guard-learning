@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   MATERIAL, World, addChair, assignValue, cloneMap, decodeMap, encodeMap, fillRect, paintGrid, removeStart,
   selectionRect, setStart,
-} from '../dist/js/core/index.js';
+} from '../packages/core/src/index.js';
 import { blankBuilding } from './helpers.js';
 
 function room() {

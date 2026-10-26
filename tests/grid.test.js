@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   MATERIAL, WALL_THICKNESS, World, addStair, alignGrid, brushBounds, decodeMap, encodeMap, eraseAt,
   floodFill, gridLine, gridRect, isGridAligned, normalizeMap, paintGrid, stairFlightLength, stairToWorld, validateStair,
-} from '../dist/js/core/index.js';
+} from '../packages/core/src/index.js';
 import { courtyard } from './helpers.js';
 
 /** A blank grid-aligned single-floor map (built from the legacy single-floor shape). */

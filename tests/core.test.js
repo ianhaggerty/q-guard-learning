@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MATERIAL, RGB, World, decodeMap, encodeMap, fillRect, floodFill, groupDoors, toRGBA, traceLine,
-} from '../dist/js/core/index.js';
+} from '../packages/core/src/index.js';
 import { courtyard } from './helpers.js';
 
 /** A 40 × 26 single-floor room split by a 2 px opaque wall at x = 19, with an 8 px gap of `gapMaterial`. */

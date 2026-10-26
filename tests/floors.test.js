@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   MATERIAL, WALL_THICKNESS, World, addStair, cloneMap, decodeMap, encodeMap,
   eraseAt, fillRect, removeStair, stairFlightLength, stairSize, stairToWorld, traceLine, worldToStair,
-} from '../dist/js/core/index.js';
+} from '../packages/core/src/index.js';
 import { blankBuilding, courtyard, pixelIndexAt, readFixture } from './helpers.js';
 
 const ROTATIONS = [0, 90, 180, 270];

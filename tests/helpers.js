@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeMap, normalizeMap } from '../dist/js/core/index.js';
+import { decodeMap, normalizeMap } from '../packages/core/src/index.js';
 
 /** A parsed JSON file from tests/fixtures/. */
 export function readFixture(name) {

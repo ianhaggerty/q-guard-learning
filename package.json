@@ -5,6 +5,12 @@
   "license": "MIT",
   "description": "Raster map editor and exploration game",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/core"
+  ],
   "scripts": {
     "test": "node --test tests/*.test.js",
     "start": "node scripts/serve.js"

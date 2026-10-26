@@ -2,7 +2,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MATERIAL, World, detectionChance, encodeMap, fillRect } from '../dist/js/core/index.js';
+import { MATERIAL, World, detectionChance, encodeMap, fillRect } from '../packages/core/src/index.js';
 import { blankBuilding, within } from './helpers.js';
 
 const near = within(1e-10);
