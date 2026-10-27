@@ -13,23 +13,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NUMBA_CACHE_DIR=/opt/numba-cache \
     NUMBA_CPU_NAME=generic \
     GUARDRL_CACHE_DIR=/var/cache/guardrl
-RUN pip install --no-cache-dir numpy==1.26.4 numba==0.60.0 \
+RUN pip install --no-cache-dir numpy==1.26.4 numba==0.60.0 "psycopg[binary]==3.2.3" boto3==1.35.54 \
  && pip install --no-cache-dir torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 RUN useradd --uid 10001 --create-home app \
  && mkdir -p "$NUMBA_CACHE_DIR" "$GUARDRL_CACHE_DIR" \
  && chown app "$NUMBA_CACHE_DIR" "$GUARDRL_CACHE_DIR"
 COPY artifacts/pyproject.toml /src/guardrl/pyproject.toml
 COPY artifacts/guardrl /src/guardrl/guardrl
-RUN pip install --no-cache-dir --no-deps /src/guardrl
+COPY services/model-store /src/model-store
+RUN pip install --no-cache-dir --no-deps /src/guardrl /src/model-store
 COPY ["artifacts/plans_curriculum/C07 Two Storey.json", "/opt/warmup/plan.json"]
 USER 10001
 RUN GUARDRL_CACHE_DIR=/tmp/warmup-los python -m guardrl.warmup /opt/warmup/plan.json --heuristic \
  && rm -rf /tmp/warmup-los
 
-# The agent service carries the pretrained checkpoints and the plans they were trained on, and
-# builds those plans' line-of-sight caches (and warms every model) at build time, so a new pod
-# is ready in seconds.
-FROM base AS agent-inference
+# The agent service and the trainer carry the pretrained checkpoints and the plans they were
+# trained on, with those plans' line-of-sight caches built (and every model warmed) at build
+# time, so a new pod is ready in seconds.
+FROM base AS with-models
 USER root
 COPY services/agent-inference /src/agent-inference
 RUN pip install --no-cache-dir --no-deps /src/agent-inference
@@ -39,10 +40,14 @@ ENV MODELS_DIR=/opt/models PLANS_DIR=/opt/plans GUARDRL_CACHE_DIR=/opt/sight-cac
 RUN mkdir -p /opt/sight-cache && chown 10001 /opt/sight-cache
 USER 10001
 RUN python -c "from agent_inference.policy import Policies; Policies().preload()"
+
+FROM with-models AS agent-inference
 EXPOSE 8080
 CMD ["python", "-m", "agent_inference.server"]
 
-FROM base AS trainer
+# The trainer image runs training jobs from the queue (python -m trainer.worker, as the
+# Kubernetes Deployment does) or a whole guardrl training run (the default entry point).
+FROM with-models AS trainer
 USER root
 COPY services/trainer /src/trainer
 RUN pip install --no-cache-dir --no-deps /src/trainer
