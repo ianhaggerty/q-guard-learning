@@ -13,6 +13,7 @@
 <header class="topbar">
   <a class="brand" href="./" aria-label="Pixel Map Lab play home"><span class="brandmark"><i></i><i></i><i></i><i></i></span>pixel<span class="brand-light"> / play</span></a>
   <div class="session"><span class="live-dot"></span><span id="sessionName">Connecting…</span></div>
+  <div id="account" class="account"></div>
   <a class="button outline" href="../">✎ Build maps</a>
 </header>
 
@@ -32,6 +33,7 @@
         <div id="agentsPanel" hidden>
           <div class="panel-title">Your agents <span>playing without you</span></div>
           <ul id="agentList" class="list"></ul>
+          <p id="agentsNote" class="empty"></p>
         </div>
         <div class="panel-title">02 <span>Live rooms</span></div>
         <ul id="roomList" class="list"></ul>
@@ -63,6 +65,7 @@
         <p id="agentStatus" class="agent-status"></p>
         <label class="toggle"><input type="checkbox" id="tuningToggle"> Fine-tune while I play</label>
         <label class="blend">Copies me <input type="range" id="blendSlider" min="0" max="100" value="50" aria-label="How closely your agent copies your play"> <output id="blendValue">50%</output></label>
+        <p id="agentKept" class="agent-kept"></p>
         <button id="resetAgent" class="quiet">Reset to the pretrained agent</button>
       </section>
       <dl class="hud">

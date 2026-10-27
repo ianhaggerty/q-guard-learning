@@ -20,10 +20,10 @@ const score = credit => (credit * 1000).toFixed(1);
 export class Game {
   /**
    * connection: { send(message) }; elements: the room view's DOM nodes; selfId: this
-   * session's id; joined: the server's 'joined' message; autopilot: whether the server
-   * offers the autopilot.
+   * player's id; signedIn: whether their agents are kept; joined: the server's 'joined'
+   * message; autopilot: whether the server offers the autopilot.
    */
-  constructor({ connection, elements, selfId, joined, autopilot }) {
+  constructor({ connection, elements, selfId, signedIn = false, joined, autopilot }) {
     this.connection = connection;
     this.elements = elements;
     this.selfId = selfId;
@@ -32,6 +32,7 @@ export class Game {
     this.intent = new Intent();
     this.autopilot = joined.you.autopilot;
     this.taught = joined.you.agent;
+    this.signedIn = signedIn;
     this.frame = 0;
     elements.title.textContent = joined.room.planName;
     elements.code.textContent = joined.room.id;
@@ -120,13 +121,15 @@ export class Game {
     this.showAgent();
   }
 
-  /** Say which agent drives for this player and how far it has been taught. */
+  /** Say which agent drives for this player, how far it has been taught and trained, and whether it is kept. */
   showAgent() {
-    const { demos, updates } = this.taught;
+    const { demos, updates, version = 0, trained, job } = this.taught;
     const learning = this.elements.tuning.checked && !this.autopilot;
-    this.elements.agentStatus.textContent = demos
-      ? `Fine-tuned on ${demos} moment${demos === 1 ? '' : 's'} of your play (${updates} training steps)${learning ? ' · learning now' : ''}.`
-      : learning ? 'Learning from your play…' : 'Pretrained: teach it by playing with fine-tuning on.';
+    const live = demos ? `Learned live from ${demos} moment${demos === 1 ? '' : 's'} of your play (${updates} steps)` : '';
+    this.elements.agentStatus.textContent = version
+      ? `Trained version ${version}${live ? ` · ${live.toLowerCase()}` : ''}${learning ? ' · learning now' : ''}.`
+      : live ? `${live}${learning ? ' · learning now' : ''}.` : learning ? 'Learning from your play…' : 'Pretrained: teach it by playing with fine-tuning on.';
+    this.elements.agentKept.textContent = this.signedIn ? keptNote(trained, job) : 'Sign in to keep your agent and train it fully between visits.';
   }
 
   loop(now) {
@@ -181,6 +184,24 @@ export class Game {
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('visibilitychange', this.onBlur);
   }
+}
+
+/** What has happened to a kept agent: its last training job's results, and the next one. */
+function keptNote(trained, job) {
+  const parts = ['Saved to your account.'];
+  if (trained) {
+    const agreement = trained.agreement_after == null ? '' : `copies you ${Math.round(100 * trained.agreement_after)}% of the time`;
+    const change = trained.cost_before ? Math.round(100 * (trained.cost_after / trained.cost_before - 1)) : null;
+    const cost = change == null ? '' : `scores ${change <= 0 ? `${-change}% better` : `${change}% worse`} than before`;
+    parts.push(`Last training: ${[agreement, cost].filter(Boolean).join(', ')}.`);
+  }
+  if (job?.status === 'queued') {
+    const wait = Math.max(0, Math.round((new Date(job.not_before) - Date.now()) / 60000));
+    parts.push(wait ? `Full training queued (in about ${wait} min).` : 'Full training queued.');
+  } else if (job?.status === 'running') {
+    parts.push('Full training under way…');
+  }
+  return parts.join(' ');
 }
 
 function formatTime(seconds) {

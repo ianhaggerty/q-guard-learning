@@ -39,6 +39,11 @@ kbd { font: 600 11px 'Space Grotesk', sans-serif; border: 1px solid var(--line);
 .brandmark i { width: 7px; height: 7px; background: var(--ink); }
 .brandmark i:nth-child(2) { background: var(--mint); }
 .brandmark i:nth-child(3) { background: var(--accent); }
+.account { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.account-name { font-weight: 600; }
+.dev-signin { display: flex; gap: 6px; }
+.dev-signin input { font: inherit; font-size: 12px; width: 8em; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.agent-kept { margin: 0; font-size: 12px; color: var(--muted); }
 .session { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 4px #78c6c033; }
 
