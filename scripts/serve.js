@@ -10,10 +10,11 @@
 // (`npm run build:web` and `build:play` produce the same layout as static folders).
 //
 // WebSocket connections to /rooms are passed through to the room server (ROOMS_URL,
-// default http://127.0.0.1:8942), so the play client always connects to its own origin,
-// as it does behind the production ingress.
+// default http://127.0.0.1:8942) and requests to /api to the API (API_URL, default
+// http://127.0.0.1:8944), so the clients always talk to their own origin -- the login cookie
+// included -- as they do behind the production ingress.
 
-import { createServer } from 'node:http';
+import { createServer, request as forward } from 'node:http';
 import { connect } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
@@ -29,6 +30,7 @@ const MOUNTS = [
 ];
 const PORT = Number(process.env.PORT) || 8941;
 const ROOMS = new URL(process.env.ROOMS_URL || 'http://127.0.0.1:8942');
+const API = new URL(process.env.API_URL || 'http://127.0.0.1:8944');
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -56,6 +58,15 @@ function resolveFile(requestUrl) {
 }
 
 const server = createServer(async (request, response) => {
+  if (request.url.startsWith('/api/')) {
+    const upstream = forward({ host: API.hostname, port: API.port || 80, method: request.method, path: request.url, headers: request.headers }, reply => {
+      response.writeHead(reply.statusCode, reply.headers);
+      reply.pipe(response);
+    });
+    upstream.on('error', () => response.writeHead(502).end('The API is not running.'));
+    request.pipe(upstream);
+    return;
+  }
   const file = resolveFile(request.url);
   if (!file) {
     response.writeHead(400).end();

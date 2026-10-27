@@ -41,3 +41,6 @@ __pycache__/
 
 # Play client build output
 /apps/play/build/
+
+# Local development data (kept agents, demonstrations)
+/.dev-data/
