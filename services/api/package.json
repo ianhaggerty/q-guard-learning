@@ -7,9 +7,11 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "migrate": "node src/migrate.js"
+    "migrate": "node src/migrate.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@pixel-map-lab/accounts": "0.1.0",
     "pg": "8.23.1"
   }
 }
