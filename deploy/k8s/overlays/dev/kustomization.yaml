@@ -1,4 +1,5 @@
-# Local cluster (kind): one replica of everything, small requests, locally loaded images.
+# Local cluster (kind): one replica of everything, small requests, locally loaded images, and
+# a single trainer worker instead of KEDA's autoscaling.
 #   docker build ... -t pml/<name>:dev && kind load docker-image pml/<name>:dev
 #   kubectl apply -k deploy/k8s/overlays/dev
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -12,12 +13,52 @@ images:
   - { name: pml/api, newTag: dev }
   - { name: pml/room-server, newTag: dev }
   - { name: pml/agent-inference, newTag: dev }
+  - { name: pml/trainer, newTag: dev }
 replicas:
   - { name: web, count: 1 }
   - { name: api, count: 1 }
   - { name: room-server, count: 1 }
   - { name: agent-inference, count: 1 }
+  - { name: trainer, count: 1 }
 patches:
+  - target: { kind: ScaledObject, name: trainer }
+    patch: |-
+      $patch: delete
+      apiVersion: keda.sh/v1alpha1
+      kind: ScaledObject
+      metadata:
+        name: trainer
+  - target: { kind: TriggerAuthentication, name: trainer-database }
+    patch: |-
+      $patch: delete
+      apiVersion: keda.sh/v1alpha1
+      kind: TriggerAuthentication
+      metadata:
+        name: trainer-database
+  - target: { kind: HorizontalPodAutoscaler }
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target: { kind: Deployment, name: room-server }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 250m
+  - target: { kind: Deployment, name: agent-inference }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: "1", memory: 1Gi }
+          limits: { cpu: "1", memory: 2Gi }
+  - target: { kind: Deployment, name: trainer }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: "1", memory: 1Gi }
+          limits: { cpu: "2", memory: 3Gi }
   - target: { kind: HorizontalPodAutoscaler }
     patch: |-
       - op: replace

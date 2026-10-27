@@ -1,0 +1,86 @@
+# Training workers: reward-driven fine-tuning of players' agents, from the queue in Postgres.
+# Workers are stateless (models and demonstrations are in object storage), claim jobs with
+# FOR UPDATE SKIP LOCKED and hold renewable leases, so any number can run side by side and a
+# worker that dies only delays its job. Capacity is added by adding workers: KEDA scales the
+# Deployment on the number of jobs due (queued and running), one worker per job, from zero
+# up to 20. A job takes about a minute on two threads, so a worker handles about 60 an hour;
+# at the scheduled rate (at most one job per player and map every 10 minutes while they
+# teach) that is about 8 players teaching at once per worker.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trainer
+spec:
+  replicas: 0 # KEDA owns the replica count
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trainer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trainer
+    spec:
+      # A job in progress is lost on a hard stop and runs again elsewhere once its lease (5 min) ends.
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: trainer
+          image: pml/trainer
+          command: ["python", "-m", "trainer.worker"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: DATABASE_URL }
+            - name: OBJECT_STORE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: OBJECT_STORE_URL }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: AWS_ACCESS_KEY_ID, optional: true }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: AWS_SECRET_ACCESS_KEY, optional: true }
+            - name: S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: S3_ENDPOINT_URL, optional: true }
+            - name: CPU_LIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.cpu, divisor: "1" }
+            - name: WORKER_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          resources:
+            requests: { cpu: "2", memory: 2Gi }
+            limits: { cpu: "2", memory: 3Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: trainer
+spec:
+  scaleTargetRef:
+    name: trainer
+  minReplicaCount: 0
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+    - type: postgresql
+      metadata:
+        query: "select count(*) from training_jobs where (status = 'queued' and not_before <= now()) or status = 'running'"
+        targetQueryValue: "1"
+      authenticationRef:
+        name: trainer-database
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: trainer-database
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: pml-secrets
+      key: DATABASE_URL

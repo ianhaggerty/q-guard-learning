@@ -1,5 +1,6 @@
 # Workloads shared by every environment. Overlays set the namespace, image tags, replica
-# counts and node placement.
+# counts and node placement. The trainer is scaled by KEDA (keda.sh), which must be
+# installed in the cluster.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 labels:
@@ -10,4 +11,5 @@ resources:
   - api.yaml
   - room-server.yaml
   - agent-inference.yaml
+  - trainer.yaml
   - ingress.yaml
