@@ -33,6 +33,9 @@ spec:
           env:
             - name: AGENT_URL # the autopilot; rooms work without it
               value: http://agent-inference
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: DATABASE_URL }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 5

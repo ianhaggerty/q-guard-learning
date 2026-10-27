@@ -1,0 +1,30 @@
+# Database migrations, run once per release before the new pods start (CI does this):
+#   kubectl create -n pml -f deploy/k8s/jobs/migrate-job.yaml
+#   kubectl wait -n pml --for=condition=complete job -l app.kubernetes.io/name=migrate --timeout=5m
+# migrate.js applies each file in deploy/db/migrations once, under an advisory lock, so a
+# second run is harmless.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: migrate-
+  labels:
+    app.kubernetes.io/name: migrate
+    app.kubernetes.io/part-of: pixel-map-lab
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: pml/api
+          command: ["node", "src/migrate.js"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: DATABASE_URL }
+          securityContext:
+            allowPrivilegeEscalation: false

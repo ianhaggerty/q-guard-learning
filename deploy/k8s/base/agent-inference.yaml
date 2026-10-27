@@ -32,6 +32,21 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: DATABASE_URL }
+            - name: OBJECT_STORE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: OBJECT_STORE_URL }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: AWS_ACCESS_KEY_ID, optional: true }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: AWS_SECRET_ACCESS_KEY, optional: true }
+            - name: S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: S3_ENDPOINT_URL, optional: true }
             - name: MAX_TUNED_MODELS
               value: "32"
             - name: NUMBA_NUM_THREADS

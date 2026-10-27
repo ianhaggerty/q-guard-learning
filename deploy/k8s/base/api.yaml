@@ -1,4 +1,4 @@
-# Accounts, lobby, plans, agents and job submission. Stateless: scale on CPU.
+# Sign-in (GitHub OAuth) and accounts. Stateless (Postgres holds users and logins): scale on CPU.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +21,19 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: DATABASE_URL }
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: GITHUB_CLIENT_ID, optional: true }
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: pml-secrets, key: GITHUB_CLIENT_SECRET, optional: true }
+            - name: PUBLIC_URL
+              valueFrom:
+                configMapKeyRef: { name: pml-config, key: PUBLIC_URL }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
           livenessProbe:

@@ -1,6 +1,12 @@
 # Workloads shared by every environment. Overlays set the namespace, image tags, replica
-# counts and node placement. The trainer is scaled by KEDA (keda.sh), which must be
-# installed in the cluster.
+# counts and node placement, and provide two things the base only refers to:
+#   Secret pml-secrets:  DATABASE_URL, OBJECT_STORE_URL (s3://bucket/prefix or file:///dir),
+#                        S3 credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, or a role;
+#                        S3_ENDPOINT_URL for S3-compatible stores), GITHUB_CLIENT_ID and
+#                        GITHUB_CLIENT_SECRET
+#   ConfigMap pml-config: PUBLIC_URL (where browsers reach the site)
+# The trainer is scaled by KEDA (keda.sh), which must be installed in the cluster. Before each
+# release, run the database migrations: deploy/k8s/jobs/migrate-job.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 labels:
