@@ -1,13 +1,25 @@
-# Local cluster (kind): one replica of everything, small requests, locally loaded images, and
-# a single trainer worker instead of KEDA's autoscaling.
+# Local cluster (kind): one replica of everything, small requests, locally loaded images, an
+# in-cluster Postgres, a shared volume for object storage, development sign-in, and a single
+# trainer worker instead of KEDA's autoscaling.
 #   docker build ... -t pml/<name>:dev && kind load docker-image pml/<name>:dev
 #   kubectl apply -k deploy/k8s/overlays/dev
+#   kubectl create -n pml-dev -f deploy/k8s/jobs/migrate-job.yaml   (with image pml/api:dev)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: pml-dev
 resources:
   - namespace.yaml
+  - postgres.yaml
   - ../../base
+secretGenerator:
+  - name: pml-secrets
+    literals:
+      - DATABASE_URL=postgres://pml:pml-dev@postgres:5432/pml
+      - OBJECT_STORE_URL=file:///data/objects
+configMapGenerator:
+  - name: pml-config
+    literals:
+      - PUBLIC_URL=http://localhost:8080
 images:
   - { name: pml/web, newTag: dev }
   - { name: pml/api, newTag: dev }
@@ -35,23 +47,19 @@ patches:
       kind: TriggerAuthentication
       metadata:
         name: trainer-database
-  - target: { kind: HorizontalPodAutoscaler }
+  - target: { kind: Deployment, name: api }
     patch: |-
-      - op: replace
-        path: /spec/minReplicas
-        value: 1
-  - target: { kind: Deployment, name: room-server }
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: DEV_LOGIN, value: "1" }
+  - target: { kind: Deployment, name: "agent-inference|trainer" }
     patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/cpu
-        value: 250m
-  - target: { kind: Deployment, name: agent-inference }
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/resources
-        value:
-          requests: { cpu: "1", memory: 1Gi }
-          limits: { cpu: "1", memory: 2Gi }
+      - op: add
+        path: /spec/template/spec/volumes
+        value: [{ name: objects, persistentVolumeClaim: { claimName: objects } }]
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value: [{ name: objects, mountPath: /data/objects }]
   - target: { kind: Deployment, name: trainer }
     patch: |-
       - op: replace

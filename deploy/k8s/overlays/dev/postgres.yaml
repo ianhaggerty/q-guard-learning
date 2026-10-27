@@ -1,0 +1,58 @@
+# A throwaway Postgres for the local cluster (production uses a managed database), and the
+# shared volume that stands in for object storage: on a one-node kind cluster the agent
+# service and the trainer can both mount it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: public.ecr.aws/docker/library/postgres:16.4-alpine
+          env:
+            - { name: POSTGRES_USER, value: pml }
+            - { name: POSTGRES_PASSWORD, value: pml-dev }
+            - { name: POSTGRES_DB, value: pml }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec: { command: [pg_isready, -U, pml] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: 2Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: objects
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 5Gi }
