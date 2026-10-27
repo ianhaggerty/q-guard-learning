@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pml-model-store"
+version = "0.1.0"
+description = "Players' fine-tuned agents: records and training queue in Postgres, weights and demonstrations in object storage"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26,<2.1", "torch>=2.4", "psycopg[binary]==3.2.3", "boto3==1.35.54"]
+
+[tool.setuptools]
+packages = ["model_store"]
