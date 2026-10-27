@@ -1,6 +1,6 @@
-# Template for one fine-tuning job. Phase 4's job controller creates these from the queue
-# (with Kueue enforcing per-user quotas); until then it can be submitted by hand:
+# Template for a whole guardrl training run (a new pretrained checkpoint, from a config):
 #   kubectl create -n pml -f deploy/k8s/jobs/trainer-job.yaml
+# Players' agents are fine-tuned by the trainer workers instead (../base/trainer.yaml).
 # The simulator dominates training time, so the job asks for CPU, not a GPU. It runs on the
 # spot batch pool; train.py saves model.pt at every evaluation, which bounds the work lost when
 # a node is reclaimed. The trainer sizes torch and numba threads from CPU_LIMIT.
