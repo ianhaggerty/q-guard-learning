@@ -1,0 +1,15 @@
+{
+  "name": "@pixel-map-lab/accounts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Users and login sessions, shared by the API and the room server",
+  "type": "module",
+  "exports": "./src/index.js",
+  "dependencies": {
+    "pg": "8.23.1"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
