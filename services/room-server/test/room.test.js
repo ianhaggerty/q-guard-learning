@@ -193,7 +193,7 @@ test('teaching records one demonstration per decision interval from the start of
   const start = { x: explorer.position.x, y: explorer.position.y };
   room.setInput(player, { dx: 0, dy: 1, gait: 'sprint', look: 'forward' });
   for (let tick = 0; tick < 10; tick++) room.step();
-  const [{ session: who, demo }] = room.takeLessons();
+  const [{ player: who, demo }] = room.takeLessons();
   assert.equal(who, player);
   assert.deepEqual(demo.action, [3, 2, 2]); // south, sprinting, facing south
   assert.equal(demo.agent, 0);
@@ -201,4 +201,29 @@ test('teaching records one demonstration per decision interval from the start of
   room.setAutopilot(player, true);
   for (let tick = 0; tick < 10; tick++) room.step();
   assert.deepEqual(room.takeLessons(), [], 'nothing is learned while the agent drives');
+});
+
+test('lessons are full transitions: credit and energy earned, in numbered steps of one episode', () => {
+  const room = new Room('r1', plan('2')), player = session('a');
+  room.addMember(player);
+  room.setTuning(player, true);
+  room.takeLessons();
+  room.setInput(player, { dx: 1, dy: 0, gait: 'walk', look: 'forward' });
+  const demos = [];
+  for (let interval = 0; interval < 3; interval++) {
+    for (let tick = 0; tick < 10; tick++) room.step();
+    demos.push(...room.takeLessons().map(lesson => lesson.demo));
+  }
+  assert.deepEqual(demos.map(demo => demo.step), [0, 1, 2]);
+  assert.equal(new Set(demos.map(demo => demo.episode)).size, 1);
+  assert.ok(demos.every(demo => demo.kcal > 0 && demo.credit >= 0));
+  const total = room.members.get(player).explorer.energy.kcal;
+  assert.ok(Math.abs(demos.reduce((sum, demo) => sum + demo.kcal, 0) - total) < 1e-9, 'the intervals add up');
+  room.setTuning(player, false);
+  room.setTuning(player, true);
+  room.takeLessons();
+  for (let tick = 0; tick < 10; tick++) room.step();
+  const [{ demo }] = room.takeLessons();
+  assert.equal(demo.step, 0);
+  assert.notEqual(demo.episode, demos[0].episode, 'teaching again starts a new episode');
 });

@@ -65,7 +65,8 @@ export class Room {
     this.maxHumans = maxHumans;
     this.createdAt = Date.now();
     this.world = new World(alignGrid(decodeMap(plan.saved)), { empty: true });
-    // session → { explorer, present, input, sit, autopilot, action, tuning, trace, lesson }
+    // player → { explorer, session, input, sit, autopilot, action, tuning, trace, lesson, episode }
+    // `session` is the tab the player is here with, or null while their agent plays on alone.
     this.members = new Map();
     this.joins = 0;
     this.tick = 0;
@@ -73,7 +74,7 @@ export class Room {
 
   /** People in the room now. */
   get humans() {
-    return [...this.members.values()].filter(member => member.present).length;
+    return [...this.members.values()].filter(member => member.session).length;
   }
 
   /** Explorers driven by an agent, whether their player is here or not. */
@@ -86,61 +87,62 @@ export class Room {
     return this.members.size >= this.maxHumans;
   }
 
-  /** The sessions present in the room. */
+  /** The sessions (tabs) of the people in the room now. */
   get present() {
-    return [...this.members].filter(([, member]) => member.present).map(([session]) => session);
+    return [...this.members.values()].filter(member => member.session).map(member => member.session);
   }
 
   /**
-   * Add an explorer for `session`, cycling through the map's numbered starts, or bring the
-   * player back to the explorer their agent has been driving. Returns the explorer.
+   * Add an explorer for `player` (anything with an id and a name), here with `session`,
+   * cycling through the map's numbered starts; or bring the player back to the explorer
+   * their agent has been driving. Returns the explorer.
    */
-  addMember(session) {
-    const existing = this.members.get(session);
+  addMember(player, session = player) {
+    const existing = this.members.get(player);
     if (existing) {
-      existing.present = true;
+      existing.session = session;
       return existing.explorer;
     }
     const startIndex = this.joins++ % this.world.map.starts.length;
-    const explorer = this.world.addExplorer({ startIndex, id: session.id });
-    this.members.set(session, {
-      explorer, present: true, input: null, sit: false, autopilot: false, action: null, tuning: false, trace: [], lesson: null,
+    const explorer = this.world.addExplorer({ startIndex, id: player.id });
+    this.members.set(player, {
+      explorer, session, input: null, sit: false, autopilot: false, action: null, tuning: false, trace: [], lesson: null, episode: 0,
     });
     return explorer;
   }
 
-  removeMember(session) {
-    const member = this.members.get(session);
+  removeMember(player) {
+    const member = this.members.get(player);
     if (!member) return;
     this.world.removeExplorer(member.explorer);
-    this.members.delete(session);
+    this.members.delete(player);
   }
 
   /** The player leaves but their agent plays on. */
-  detachMember(session) {
-    const member = this.members.get(session);
+  detachMember(player) {
+    const member = this.members.get(player);
     if (!member) return;
-    member.present = false;
+    member.session = null;
     member.input = null;
     member.sit = false;
-    this.setTuning(session, false);
+    this.setTuning(player, false);
   }
 
   /** Keep the latest valid input; it is applied at the next tick. Ignored while the autopilot drives. */
-  setInput(session, input) {
-    const member = this.members.get(session);
+  setInput(player, input) {
+    const member = this.members.get(player);
     if (member && !member.autopilot) member.input = input;
   }
 
   /** Ask to sit down, or stand up if already sitting, at the next tick. Ignored while the autopilot drives. */
-  requestSit(session) {
-    const member = this.members.get(session);
+  requestSit(player) {
+    const member = this.members.get(player);
     if (member && !member.autopilot) member.sit = true;
   }
 
   /** Hand the explorer to the autopilot, or take it back (the explorer then stops until told otherwise). */
-  setAutopilot(session, on) {
-    const member = this.members.get(session);
+  setAutopilot(player, on) {
+    const member = this.members.get(player);
     if (!member || member.autopilot === on) return;
     member.autopilot = on;
     member.action = null;
@@ -150,13 +152,15 @@ export class Room {
     if (!on) member.explorer.setMovement(0, 0);
   }
 
-  /** Turn fine-tuning on or off: while on, the player's manual play teaches their agent. */
-  setTuning(session, on) {
-    const member = this.members.get(session);
-    if (!member) return;
+  /** Turn fine-tuning on or off: while on, the player's manual play teaches their agent. Returns whether it was on. */
+  setTuning(player, on) {
+    const member = this.members.get(player);
+    if (!member) return false;
+    const was = member.tuning;
     member.tuning = on;
     member.trace = [];
     member.lesson = null;
+    return was;
   }
 
   get hasAutopilot() {
@@ -207,21 +211,34 @@ export class Room {
 
   /**
    * The demonstrations due at this decision boundary: for each player teaching by hand, the
-   * room as it was at the start of the last 0.5 s and what they did over it. Each comes with
-   * its session: [{ session, demo: { plan, player, agent, explorers, means, action } }].
-   * The boundary also starts the next lesson for everyone teaching.
+   * room as it was at the start of the last 0.5 s, what they did over it, and what it earned
+   * (detection credit and energy) -- a full transition, so the trainer can learn from its
+   * reward. Consecutive lessons share an episode and count up `step`, which links each to
+   * the next; teaching that stops and starts again begins a new episode.
+   * Returns [{ player, demo: { plan, player, agent, explorers, means, action, credit, kcal, episode, step } }].
    */
   takeLessons() {
     const lessons = [];
     let state = null;
-    [...this.members].forEach(([session, member], index) => {
-      if (!member.tuning || member.autopilot || !member.present) return;
+    [...this.members].forEach(([player, member], index) => {
+      if (!member.tuning || member.autopilot || !member.session) return;
+      const { explorer } = member;
+      let step = 0;
       if (member.lesson && member.trace.length) {
-        const action = summarise(member.trace, member.lesson.sitting);
-        lessons.push({ session, demo: { ...member.lesson.state, player: session.id, agent: member.lesson.agent, action } });
+        const { lesson } = member;
+        lessons.push({
+          player,
+          demo: {
+            ...lesson.state, player: player.id, agent: lesson.agent, action: summarise(member.trace, lesson.sitting),
+            credit: explorer.credit - lesson.credit, kcal: explorer.energy.kcal - lesson.kcal, episode: member.episode, step: lesson.step,
+          },
+        });
+        step = lesson.step + 1;
+      } else {
+        member.episode = newEpisode();
       }
       state ??= this.agentState();
-      member.lesson = { state, agent: index, sitting: member.explorer.sitting };
+      member.lesson = { state, agent: index, sitting: explorer.sitting, credit: explorer.credit, kcal: explorer.energy.kcal, step };
       member.trace = [];
     });
     return lessons;
@@ -257,7 +274,7 @@ export class Room {
     this.world.advanceAll(TICK_SECONDS);
     this.tick++;
     for (const member of this.members.values()) {
-      if (!member.tuning || member.autopilot || !member.present || !member.lesson) continue;
+      if (!member.tuning || member.autopilot || !member.session || !member.lesson) continue;
       const { explorer } = member, { dx, dy } = explorer.movement;
       const move = dx || dy ? MOVES.findIndex(([x, y]) => x === Math.sign(dx) && y === Math.sign(dy)) + 1 : 0;
       member.trace.push([move, GAIT_NAMES.indexOf(explorer.gait), explorer.facing, explorer.sitting]);
@@ -273,9 +290,9 @@ export class Room {
       time: round(world.time, 2),
       psum: round(world.probabilities.sum, 5),
       spotted: world.events.resolved,
-      explorers: [...this.members.entries()].map(([session, { explorer }]) => ({
+      explorers: [...this.members.entries()].map(([player, { explorer, autopilot, session }]) => ({
         id: explorer.id,
-        name: session.name,
+        name: player.name,
         x: round(explorer.position.x, 3),
         y: round(explorer.position.y, 3),
         floor: explorer.floorIndex,
@@ -286,8 +303,8 @@ export class Room {
         sitting: explorer.sitting,
         credit: Number(explorer.credit.toPrecision(6)),
         kcal: round(explorer.energy.kcal, 3),
-        autopilot: this.members.get(session).autopilot,
-        away: !this.members.get(session).present,
+        autopilot,
+        away: !session,
       })),
       // For each floor, the indices of its open doors (in groupDoors order).
       doors: world.floorDoors.map(({ doors }) => doors.flatMap((door, index) => (door.open ? [index] : []))),
@@ -318,6 +335,13 @@ export class Room {
     });
     return { type: 'heat', block: GRID, width, height, floors };
   }
+}
+
+let episodes = 0;
+
+/** A new episode number, unique across rooms and restarts (milliseconds, then a counter). */
+function newEpisode() {
+  return Date.now() * 100 + (episodes++ % 100);
 }
 
 /** The most frequent value in a list. */

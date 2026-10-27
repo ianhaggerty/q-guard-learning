@@ -3,6 +3,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { WebSocket as Client } from 'ws';
+import { MemoryAccounts, SESSION_COOKIE } from '@pixel-map-lab/accounts';
 import { startServer } from '../src/server.js';
 
 const TICK_MS = 2;
@@ -51,7 +53,9 @@ test('every connection is a new session with a unique id, the seven plans and th
   const [a, b] = [await connect(room.port), await connect(room.port)];
   const [welcomeA, welcomeB] = [await a.next('welcome'), await b.next('welcome')];
   assert.notEqual(welcomeA.session.id, welcomeB.session.id);
-  assert.match(welcomeA.session.name, /^Guest [0-9a-f]{4}$/);
+  assert.notEqual(welcomeA.player.id, welcomeB.player.id, 'every guest is their own player');
+  assert.match(welcomeA.player.name, /^Guest [0-9a-f]{4}$/);
+  assert.equal(welcomeA.player.signedIn, false);
   assert.deepEqual(welcomeA.plans.map(plan => plan.id), ['1', '2', '3', '4', '5', '6', '7']);
   assert.equal(welcomeA.plans[6].name, 'Alcatraz');
   assert.deepEqual(welcomeA.rooms, []);
@@ -63,14 +67,14 @@ test('creating a room joins it, sends the map and lists it for others in the lob
   const room = await server();
   t.after(room.close);
   const [host, watcher] = [await connect(room.port), await connect(room.port)];
-  const { session } = await host.next('welcome');
+  const { player } = await host.next('welcome');
   await watcher.next('welcome');
   host.send({ type: 'create', plan: '3' });
   const joined = await host.next('joined');
   assert.equal(joined.room.plan, '3');
   assert.equal(joined.map.format, 'pixel-map-lab');
   const state = await host.next('state');
-  assert.deepEqual(state.explorers.map(explorer => explorer.id), [session.id]);
+  assert.deepEqual(state.explorers.map(explorer => explorer.id), [player.id]);
   const { rooms } = await watcher.next('rooms', message => message.rooms.length === 1);
   assert.deepEqual(rooms.map(({ id, plan, humans }) => ({ id, plan, humans })), [{ id: joined.room.id, plan: '3', humans: 1 }]);
   await host.close();
@@ -81,7 +85,7 @@ test('a second human joins an existing room and both explorers appear in its sna
   const room = await server();
   t.after(room.close);
   const [host, guest] = [await connect(room.port), await connect(room.port)];
-  const hostId = (await host.next('welcome')).session.id, guestId = (await guest.next('welcome')).session.id;
+  const hostId = (await host.next('welcome')).player.id, guestId = (await guest.next('welcome')).player.id;
   host.send({ type: 'create', plan: '6' });
   const { room: { id } } = await host.next('joined');
   guest.send({ type: 'join', room: id });
@@ -193,4 +197,21 @@ test('a session that floods the server is disconnected', async t => {
   await flooder.next('welcome');
   for (let i = 0; i < 200; i++) flooder.send({ type: 'sit' });
   assert.equal(await flooder.closed, 1008);
+});
+
+test('a WebSocket that brings a valid login cookie is that user\'s; a bad one makes a guest', async t => {
+  const accounts = new MemoryAccounts();
+  const user = await accounts.devUser('alice');
+  const token = await accounts.createSession(user.id);
+  const room = await server({ accounts });
+  t.after(room.close);
+  const welcome = cookie => new Promise((resolve, reject) => {
+    const ws = new Client(`ws://127.0.0.1:${room.port}/rooms`, { headers: { cookie } });
+    ws.on('message', data => { resolve(JSON.parse(data)); ws.close(); });
+    ws.on('error', reject);
+  });
+  const signed = await welcome(`${SESSION_COOKIE}=${token}`);
+  assert.deepEqual(signed.player, { id: `user:${user.id}`, name: 'dev:alice', signedIn: true });
+  const guest = await welcome(`${SESSION_COOKIE}=forged`);
+  assert.equal(guest.player.signedIn, false);
 });

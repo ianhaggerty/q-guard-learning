@@ -97,6 +97,9 @@ function fakeAgents(reply = request => request.agents.map(() => [0, 0, 0])) {
     requests, demos, resets, forgotten,
     act: async request => { requests.push(request); return reply(request); },
     demonstrate: async request => { demos.push(request); return { demos: demos.length, updates: 2 * demos.length, blend: request.blend }; },
+    flushes: [],
+    flush: async function (player, plan) { this.flushes.push([player, plan]); return {}; },
+    status: async () => ({ demos: 0, updates: 0 }),
     reset: async (player, plan) => { resets.push([player, plan]); return {}; },
     forget: async player => { forgotten.push(player); return {}; },
   };
@@ -120,7 +123,7 @@ test('autopilot explorers get a decision every 0.5 s from the agent service', as
   assert.equal(socket.last('welcome').autopilot, true);
   lobby.handle(human, { type: 'create', plan: '2' });
   lobby.handle(human, { type: 'autopilot', on: true });
-  const explorer = human.room.members.get(human).explorer, x = explorer.position.x;
+  const explorer = human.room.members.get(human.player).explorer, x = explorer.position.x;
   for (let tick = 0; tick < 10; tick++) lobby.tick();
   await settle();
   assert.equal(agents.requests.length, 1);
@@ -144,7 +147,7 @@ test('when the agent service fails, autopilot explorers stop and their players a
   }
   assert.equal(agents.requests.length, 3);
   assert.equal(socket.sent.filter(message => message.type === 'error').length, 1);
-  assert.deepEqual(human.room.members.get(human).explorer.movement, { dx: 0, dy: 0 });
+  assert.deepEqual(human.room.members.get(human.player).explorer.movement, { dx: 0, dy: 0 });
 });
 
 test('heatmaps go only to the players who asked, twice a second', () => {
@@ -216,7 +219,7 @@ test('closing the tab stops every agent of the player and forgets their models',
   lobby.disconnect(human);
   assert.equal(lobby.rooms.size, 0);
   await settle();
-  assert.deepEqual(agents.forgotten, [human.id]);
+  assert.deepEqual(agents.forgotten, [human.player.id]);
 });
 
 test('playing by hand with fine-tuning on sends demonstrations and reports progress; reset discards it', async () => {
@@ -232,7 +235,7 @@ test('playing by hand with fine-tuning on sends demonstrations and reports progr
   await settle();
   assert.ok(agents.demos.length >= 1);
   const [demo] = agents.demos;
-  assert.deepEqual([demo.plan, demo.player, demo.agent, demo.blend], ['2', human.id, 0, 0.8]);
+  assert.deepEqual([demo.plan, demo.player, demo.agent, demo.blend], ['2', human.player.id, 0, 0.8]);
   assert.deepEqual(demo.action, [1, 1, 2]);
   assert.equal(socket.last('tuning').demos, agents.demos.length);
 
@@ -244,7 +247,7 @@ test('playing by hand with fine-tuning on sends demonstrations and reports progr
 
   lobby.handle(human, { type: 'resetAgent' });
   await settle();
-  assert.deepEqual(agents.resets, [[human.id, '2']]);
+  assert.deepEqual(agents.resets, [[human.player.id, '2']]);
   assert.deepEqual(socket.last('tuning'), { type: 'tuning', plan: '2', demos: 0, updates: 0 });
 });
 
@@ -257,5 +260,71 @@ test('fine-tuning needs the agent service, and blends must be numbers', () => {
   lobby.handle(human, { type: 'blend', value: 'lots' });
   assert.match(socket.last('error').message, /number/);
   lobby.handle(human, { type: 'blend', value: 7 });
-  assert.equal(human.blend, 1);
+  assert.equal(human.player.blend, 1);
+});
+
+const alice = { id: 'a11ce', login: 'alice' };
+
+test('a signed-in user is one player across tabs; a second tab in the same room takes over', () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const [one, two] = [fakeSocket(), fakeSocket()];
+  const [tabA, tabB] = [lobby.connect(one, alice), lobby.connect(two, alice)];
+  assert.equal(tabA.player, tabB.player);
+  assert.deepEqual(one.last('welcome').player, { id: 'user:a11ce', name: 'alice', signedIn: true });
+  lobby.handle(tabA, { type: 'create', plan: '2' });
+  const room = tabA.room;
+  lobby.handle(tabB, { type: 'join', room: room.id });
+  assert.equal(room.members.size, 1, 'still one explorer');
+  assert.equal(tabA.room, null);
+  assert.match(one.last('left').reason, /another tab/);
+  assert.equal(room.members.get(tabA.player).session, tabB);
+  lobby.handle(tabA, { type: 'leave' });
+  assert.equal(room.members.size, 1, 'the tab that lost control leaving changes nothing');
+});
+
+test('a signed-in player\'s agent plays on after their last tab closes, then retires', async () => {
+  const agents = fakeAgents();
+  const lobby = lobbyWith({ agents, offlineSeconds: 0.05 });
+  const tab = lobby.connect(fakeSocket(), alice);
+  lobby.handle(tab, { type: 'create', plan: '2' });
+  const room = tab.room;
+  lobby.handle(tab, { type: 'autopilot', on: true });
+  lobby.disconnect(tab);
+  assert.equal(lobby.rooms.size, 1, 'the agent plays on with no tab open');
+  assert.equal(room.snapshot().explorers[0].away, true);
+
+  const back = fakeSocket(), again = lobby.connect(back, alice);
+  assert.deepEqual(back.last('agents').agents.map(agent => agent.room), [room.id], 'a new tab hears where the agent is');
+  assert.equal(back.last('agents').offlineSeconds, 0.05);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(lobby.rooms.size, 1, 'coming back in time keeps it');
+
+  lobby.disconnect(again);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(lobby.rooms.size, 0, 'an hour (here 50 ms) after the last tab closed, it stops');
+  assert.deepEqual(agents.forgotten, ['user:a11ce']);
+});
+
+test('a signed-in player who closes their tab while playing by hand leaves nothing behind', () => {
+  const lobby = lobbyWith({ agents: fakeAgents() });
+  const tab = lobby.connect(fakeSocket(), alice);
+  lobby.handle(tab, { type: 'create', plan: '2' });
+  lobby.disconnect(tab);
+  assert.equal(lobby.rooms.size, 0);
+  assert.equal(lobby.players.size, 0);
+});
+
+test('stopping teaching in any way tells the agent service to save', () => {
+  const agents = fakeAgents();
+  const lobby = lobbyWith({ agents });
+  const tab = lobby.connect(fakeSocket(), alice);
+  lobby.handle(tab, { type: 'create', plan: '2' });
+  lobby.handle(tab, { type: 'tuning', on: true });
+  lobby.handle(tab, { type: 'tuning', on: false });
+  lobby.handle(tab, { type: 'tuning', on: true });
+  lobby.handle(tab, { type: 'autopilot', on: true });
+  lobby.handle(tab, { type: 'autopilot', on: false });
+  lobby.handle(tab, { type: 'tuning', on: true });
+  lobby.handle(tab, { type: 'leave' });
+  assert.deepEqual(agents.flushes, [['user:a11ce', '2'], ['user:a11ce', '2'], ['user:a11ce', '2']]);
 });

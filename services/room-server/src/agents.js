@@ -9,7 +9,9 @@ const DECISION_TIMEOUT_MS = 2000;
 /**
  * A client for the agent service at `url`:
  *   act(request)          → [[move, gait, gaze], ...]
- *   demonstrate(request)  → { demos, updates, blend }
+ *   demonstrate(request)  → { demos, updates, blend, version }
+ *   flush(player, plan)   the player stopped teaching
+ *   status(player, plan)  → { demos, updates, version, trained, job }
  *   reset(player, plan), forget(player)
  */
 export function agentClient(url) {
@@ -26,6 +28,8 @@ export function agentClient(url) {
   return {
     act: async request => (await post('/act', request)).actions,
     demonstrate: request => post('/demonstrate', request),
+    flush: (player, plan) => post('/flush', { player, plan }),
+    status: (player, plan) => post('/status', { player, plan }),
     reset: (player, plan) => post('/reset', { player, plan }),
     forget: player => post('/forget', { player }),
   };
