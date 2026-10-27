@@ -21,14 +21,19 @@ shared), and take a couple of milliseconds each.
 
 Environment: PORT (8080), PLANS_DIR and MODELS_DIR (the repository's plans and
 artifacts/final_models), GUARDRL_CACHE_DIR (line-of-sight caches), MAX_TUNED_MODELS (32
-live players' agents at once), DATABASE_URL and OBJECT_STORE_URL (keeping users' agents).
+live players' agents at once), DATABASE_URL and OBJECT_STORE_URL (keeping users' agents),
+DATABASE_CONNECTIONS (4: the most this process opens; a request that finds storage
+unreachable or every connection busy gets 503).
 """
 import json
 import os
 import signal
 import sys
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from model_store import Unavailable
 
 from .persistence import Persistence
 from .policy import Policies
@@ -71,6 +76,13 @@ def make_handler(policies, ready):
             except (KeyError, ValueError, TypeError) as error:
                 self.reply(400, json.dumps({'error': str(error)}).encode())
                 return
+            except Unavailable as error:
+                self.reply(503, json.dumps({'error': f'storage unavailable: {error}'}).encode())
+                return
+            except Exception:
+                traceback.print_exc()
+                self.reply(500, b'{"error": "internal error"}')
+                return
             self.reply(200, json.dumps(result).encode())
 
         def reply(self, status, body, content_type='application/json'):
@@ -92,7 +104,8 @@ def persistence_from_env():
         return None
     from model_store.objects import open_objects
     from model_store.store import Store
-    return Persistence(Store(os.environ['DATABASE_URL']), open_objects())
+    store = Store(os.environ['DATABASE_URL'], int(os.environ.get('DATABASE_CONNECTIONS', 4)), wait_seconds=1)
+    return Persistence(store, open_objects())
 
 
 def serve(port=8080, plans_dir=None, models_dir=None, preload=True, persistence=None):

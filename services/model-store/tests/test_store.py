@@ -9,8 +9,10 @@ import unittest
 
 import boto3
 import numpy as np
+import psycopg
 from moto import mock_aws
 
+from model_store import Unavailable
 from model_store.objects import LocalObjects, S3Objects, open_objects
 from model_store.schedule import COOLDOWN_SECONDS, JOB_AFTER_DEMOS, maybe_enqueue
 from model_store.serialize import concat_demos, demos_bytes, load_demos, load_model, model_bytes
@@ -66,7 +68,7 @@ class StoreTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.store.connection().close()
+        cls.store.close()
         drop_database(cls.url)
 
     def test_publishing_is_versioned_and_guards_against_races(self):
@@ -123,7 +125,7 @@ class StoreTest(unittest.TestCase):
             while (job := store.claim(name, 60)) is not None:
                 with lock:
                     claimed.append(job['id'])
-            store.connection().close()
+            store.close()
         threads = [threading.Thread(target=work, args=(f'w{k}',)) for k in range(4)]
         for thread in threads:
             thread.start()
@@ -131,6 +133,41 @@ class StoreTest(unittest.TestCase):
             thread.join()
         self.assertEqual(len(claimed), 12)
         self.assertEqual(len(set(claimed)), 12)
+
+    def test_threads_share_a_few_connections(self):
+        store, failures = Store(self.url, max_connections=3), []
+
+        def ask():
+            try:
+                store.query('select pg_sleep(0.01)')
+            except Exception as error:
+                failures.append(error)
+        threads = [threading.Thread(target=ask) for _ in range(60)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(failures, [])
+        self.assertLessEqual(len(store.idle), 3)
+        store.close()
+
+    def test_no_free_connection_is_unavailable(self):
+        store = Store(self.url, max_connections=1, wait_seconds=0.1)
+        with store.connection():
+            with self.assertRaises(Unavailable):
+                store.query('select 1')
+        self.assertEqual(store.query('select 1 as n', one=True)['n'], 1)
+        store.close()
+
+    def test_a_lost_connection_is_unavailable_then_replaced(self):
+        store = Store(self.url, max_connections=1)
+        pid = store.query('select pg_backend_pid() as pid', one=True)['pid']
+        with psycopg.connect(self.url, autocommit=True) as admin:
+            admin.execute('select pg_terminate_backend(%s)', (pid,))
+        with self.assertRaises(Unavailable):
+            store.query('select 1')
+        self.assertNotEqual(store.query('select pg_backend_pid() as pid', one=True)['pid'], pid)
+        store.close()
 
     def test_schedule_needs_enough_new_demonstrations_and_respects_the_cooldown(self):
         user = new_user(self.url)

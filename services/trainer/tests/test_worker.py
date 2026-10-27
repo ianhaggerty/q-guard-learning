@@ -35,7 +35,7 @@ class WorkerTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.store.connection().close()
+        cls.store.close()
         drop_database(cls.url)
         cls.tmp.cleanup()
 

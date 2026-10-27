@@ -3,32 +3,66 @@
 Published models, the demonstration chunks they learn from, and the training queue. Workers
 claim jobs with FOR UPDATE SKIP LOCKED, so any number of them can share the queue, and hold
 a lease they renew while working; a job whose lease runs out (its worker died) is claimed
-again. Every method opens its own short transaction, so a Store can be shared by threads.
+again.
+
+A Store is shared by threads. Every method takes one of the store's own connections for a
+short transaction; there are at most `max_connections`, so a busy service cannot exhaust the
+database's connections, and a thread waits up to `wait_seconds` for one. A connection that
+fails is replaced. Failures to reach the database raise model_store.Unavailable.
 """
 import json
 import threading
+from contextlib import contextmanager
 
 import psycopg
+from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
+
+from . import Unavailable
 
 #: Failed jobs are retried this many times in all, a minute apart.
 MAX_ATTEMPTS = 3
 
 
 class Store:
-    def __init__(self, database_url):
-        self.url = database_url
-        self.local = threading.local()
+    def __init__(self, database_url, max_connections=4, wait_seconds=5):
+        self.url, self.wait_seconds = database_url, wait_seconds
+        self.slots = threading.BoundedSemaphore(max_connections)
+        self.idle, self.lock = [], threading.Lock()
 
+    @contextmanager
     def connection(self):
-        conn = getattr(self.local, 'conn', None)
-        if conn is None or conn.closed:
-            conn = psycopg.connect(self.url, autocommit=True, row_factory=dict_row)
-            self.local.conn = conn
-        return conn
+        """One of the store's connections, for the with block."""
+        if not self.slots.acquire(timeout=self.wait_seconds):
+            raise Unavailable('every database connection is busy')
+        conn = None
+        try:
+            with self.lock:
+                conn = self.idle.pop() if self.idle else None
+            if conn is None or conn.closed:
+                conn = psycopg.connect(self.url, autocommit=True, row_factory=dict_row, connect_timeout=5)
+            yield conn
+        except psycopg.OperationalError as error:
+            raise Unavailable(str(error).strip()) from error
+        finally:
+            if conn is not None and not conn.closed and conn.info.transaction_status == TransactionStatus.IDLE:
+                with self.lock:
+                    self.idle.append(conn)
+            elif conn is not None:
+                conn.close()
+            self.slots.release()
 
-    def query(self, sql, params=(), one=False):
-        with self.connection().cursor() as cursor:
+    def close(self):
+        with self.lock:
+            idle, self.idle = self.idle, []
+        for conn in idle:
+            conn.close()
+
+    def query(self, sql, params=(), one=False, conn=None):
+        if conn is None:
+            with self.connection() as conn:
+                return self.query(sql, params, one, conn)
+        with conn.cursor() as cursor:
             cursor.execute(sql, params)
             if cursor.description is None:
                 return None
@@ -63,11 +97,11 @@ class Store:
     def reset(self, user_id, plan_id):
         """Forget the user's agent for the plan: its model, demonstrations and open jobs.
         Returns the object keys that are no longer needed."""
-        with self.connection().transaction():
-            model = self.query('delete from agent_models where user_id = %s and plan_id = %s returning object_key', (user_id, plan_id), one=True)
-            chunks = self.query('delete from demo_chunks where user_id = %s and plan_id = %s returning object_key', (user_id, plan_id))
+        with self.connection() as conn, conn.transaction():
+            model = self.query('delete from agent_models where user_id = %s and plan_id = %s returning object_key', (user_id, plan_id), True, conn)
+            chunks = self.query('delete from demo_chunks where user_id = %s and plan_id = %s returning object_key', (user_id, plan_id), conn=conn)
             self.query("""update training_jobs set status = 'cancelled', finished_at = now()
-                          where user_id = %s and plan_id = %s and status in ('queued', 'running')""", (user_id, plan_id))
+                          where user_id = %s and plan_id = %s and status in ('queued', 'running')""", (user_id, plan_id), conn=conn)
         return ([model['object_key']] if model else []) + [chunk['object_key'] for chunk in chunks]
 
     # ------------------------------------------------------------------ demonstrations
