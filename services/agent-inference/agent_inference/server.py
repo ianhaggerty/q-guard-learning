@@ -5,11 +5,15 @@ POST /act takes one room's state (see policy.Policies.act) and returns
 it every 0.5 s for each room with an agent in control.
 
 Players' own agents (see tuning.py) are taught and managed with
-  POST /demonstrate  one moment of a player's play -> {"demos", "updates", "blend"}
+  POST /demonstrate  one moment of a player's play -> {"demos", "updates", "blend", "version"}
+  POST /flush        {"player", "plan"}: they stopped teaching (save, maybe queue training)
+  POST /status       {"player", "plan"} -> how far their agent is taught and trained
   POST /reset        {"player", "plan"}: back to the pretrained agent on that plan
-  POST /forget       {"player"}: the player has gone; drop all their agents
-and trained by a background thread. Tuned models live in this process, so every request
-for a player must reach the same replica (one replica until rooms are routed in phase 5).
+  POST /forget       {"player"}: the player has gone; drop their live agents
+and trained live by a background thread. With DATABASE_URL and OBJECT_STORE_URL set,
+logged-in players' ("user:<id>") demonstrations and agents are kept, trained further by the
+trainer service, and followed as new versions are published (see persistence.py). Live
+models are held in this process, so every request for a player must reach the same replica.
 
 Start-up loads and warms every plan and checkpoint in the background: /healthz answers at
 once, /readyz once that is done. Decisions are serialised (the cached environments are
@@ -17,7 +21,7 @@ shared), and take a couple of milliseconds each.
 
 Environment: PORT (8080), PLANS_DIR and MODELS_DIR (the repository's plans and
 artifacts/final_models), GUARDRL_CACHE_DIR (line-of-sight caches), MAX_TUNED_MODELS (32
-players' agents kept at once).
+live players' agents at once), DATABASE_URL and OBJECT_STORE_URL (keeping users' agents).
 """
 import json
 import os
@@ -26,6 +30,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .persistence import Persistence
 from .policy import Policies
 
 #: Largest request accepted: the field means of the biggest plan, base64-encoded, fit with room to spare.
@@ -36,8 +41,10 @@ def make_handler(policies, ready):
     routes = {
         '/act': lambda body: {'actions': policies.act(body)},
         '/demonstrate': policies.demonstrate,
-        '/reset': lambda body: (policies.tuned.reset(str(body['player']), str(body['plan'])), {})[1],
-        '/forget': lambda body: (policies.tuned.forget(str(body['player'])), {})[1],
+        '/flush': lambda body: (policies.flush(str(body['player']), str(body['plan'])), {})[1],
+        '/status': lambda body: policies.status(str(body['player']), str(body['plan'])),
+        '/reset': lambda body: (policies.reset(str(body['player']), str(body['plan'])), {})[1],
+        '/forget': lambda body: (policies.forget(str(body['player'])), {})[1],
     }
 
     class Handler(BaseHTTPRequestHandler):
@@ -79,10 +86,20 @@ def make_handler(policies, ready):
     return Handler
 
 
-def serve(port=8080, plans_dir=None, models_dir=None, preload=True):
+def persistence_from_env():
+    """Keeping users' agents, if DATABASE_URL and OBJECT_STORE_URL are set."""
+    if not (os.environ.get('DATABASE_URL') and os.environ.get('OBJECT_STORE_URL')):
+        return None
+    from model_store.objects import open_objects
+    from model_store.store import Store
+    return Persistence(Store(os.environ['DATABASE_URL']), open_objects())
+
+
+def serve(port=8080, plans_dir=None, models_dir=None, preload=True, persistence=None):
     """Start serving, and training players' agents, in background threads. Returns (server, ready event)."""
-    policies, ready = Policies(plans_dir, models_dir), threading.Event()
-    policies.tuned.start()
+    policies = Policies(plans_dir, models_dir, persistence, int(os.environ.get('MAX_TUNED_MODELS', 32)))
+    ready = threading.Event()
+    policies.start()
     server = ThreadingHTTPServer(('', port), make_handler(policies, ready))
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -97,8 +114,9 @@ def serve(port=8080, plans_dir=None, models_dir=None, preload=True):
 
 def main():
     env = os.environ
-    server, _ = serve(int(env.get('PORT', 8080)), env.get('PLANS_DIR'), env.get('MODELS_DIR'))
-    print(f'agent inference on :{server.server_address[1]}', flush=True)
+    persistence = persistence_from_env()
+    server, _ = serve(int(env.get('PORT', 8080)), env.get('PLANS_DIR'), env.get('MODELS_DIR'), persistence=persistence)
+    print(f'agent inference on :{server.server_address[1]} (users\' agents {"kept" if persistence else "not kept"})', flush=True)
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())

@@ -11,7 +11,9 @@ demonstrations, mixing two losses by the player's blend a in [0, 1]:
           -> keep the pretrained agent's judgement, which was trained to score.
 
 So a = 1 copies the player as closely as it can and a = 0 leaves the pretrained agent as it
-was. Models belong to a session: they are dropped when the player resets them or leaves.
+was. This is the quick, live half of fine-tuning; for logged-in players the trainer service
+periodically consolidates their demonstrations with reward-driven learning and publishes a
+new version, which replaces the live model's starting point (see persistence.py).
 """
 import copy
 import threading
@@ -48,13 +50,16 @@ def greedy(net, loc, glo, vec, mask):
 
 
 class TunedModel:
-    """One player's agent for one plan: a trainable copy of `base` and its demonstrations."""
+    """One player's agent for one plan: a trainable copy of `base` and its demonstrations.
 
-    def __init__(self, base):
-        self.base = base                       # the pretrained network, never trained here
-        self.net = copy.deepcopy(base)
-        self.net.train()
-        self.opt = torch.optim.Adam(self.net.parameters(), lr=LEARNING_RATE)
+    meta describes where it comes from: version (0 for the pretrained checkpoint, else the
+    player's published version), base_checkpoint and guards. `pending` holds demonstrations
+    not yet saved, for players whose agents are kept (see persistence.py).
+    """
+
+    def __init__(self, base, meta=None):
+        self.meta = dict(meta or {'version': 0})
+        self.pending = []
         self.loc = np.zeros((MAX_DEMOS, C_L, L, L), np.float16)
         self.glo = np.zeros((MAX_DEMOS, C_G, GG, GG), np.float16)
         self.vec = np.zeros((MAX_DEMOS, N_V), np.float32)
@@ -66,6 +71,22 @@ class TunedModel:
         self.blend = 0.5
         self.lock = threading.Lock()
         self.rng = np.random.default_rng(0)
+        self.use(base)
+
+    def use(self, base):
+        """Start from `base`, which is never trained here: the pretrained network or a
+        published version. Demonstrations already held stay, but count as learned."""
+        self.base = base
+        self.net = copy.deepcopy(base)
+        self.net.train()
+        self.opt = torch.optim.Adam(self.net.parameters(), lr=LEARNING_RATE)
+        self.updates = self.demos * UPDATES_PER_DEMO
+
+    def replace(self, base, meta):
+        """Move on to a newly published version."""
+        with self.lock:
+            self.use(base)
+            self.meta.update(meta)
 
     def add(self, loc, glo, vec, mask, action, blend):
         with self.lock:
@@ -113,7 +134,7 @@ class TunedModel:
             return greedy(self.net, loc, glo, vec, mask)
 
     def status(self):
-        return {'demos': self.demos, 'updates': self.updates, 'blend': self.blend}
+        return {'demos': self.demos, 'updates': self.updates, 'blend': self.blend, 'version': self.meta.get('version', 0)}
 
 
 class TunedModels:
@@ -124,8 +145,9 @@ class TunedModels:
     pretrained agent on that map.
     """
 
-    def __init__(self, limit=32):
+    def __init__(self, limit=32, on_evict=None):
         self.limit = limit
+        self.on_evict = on_evict  # called with (player, plan_id, model) for each model pushed out
         self.models = OrderedDict()
         self.lock = threading.Lock()
         self.thread = None
@@ -138,24 +160,37 @@ class TunedModels:
                 self.models.move_to_end((player, plan_id))
             return model
 
-    def get_or_create(self, player, plan_id, base):
+    def get_or_create(self, player, plan_id, base, meta=None):
+        evicted = []
         with self.lock:
             key = (player, plan_id)
             if key not in self.models:
-                self.models[key] = TunedModel(base)
+                self.models[key] = TunedModel(base, meta)
                 while len(self.models) > self.limit:
-                    self.models.popitem(last=False)
+                    evicted.append(self.models.popitem(last=False))
             self.models.move_to_end(key)
-            return self.models[key]
+            model = self.models[key]
+        for (old_player, old_plan), old in evicted:
+            if self.on_evict:
+                self.on_evict(old_player, old_plan, old)
+        return model
 
     def reset(self, player, plan_id):
         with self.lock:
             self.models.pop((player, plan_id), None)
 
     def forget(self, player):
+        """Drop all of a player's models. Returns them as [((player, plan_id), model)]."""
         with self.lock:
-            for key in [key for key in self.models if key[0] == player]:
+            dropped = [(key, model) for key, model in self.models.items() if key[0] == player]
+            for key, _ in dropped:
                 del self.models[key]
+        return dropped
+
+    def snapshot(self):
+        """[((player, plan_id), model)] for every model held."""
+        with self.lock:
+            return list(self.models.items())
 
     def train_once(self):
         """One gradient step for every model that is due. Returns how many stepped."""

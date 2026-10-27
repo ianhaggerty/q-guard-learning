@@ -34,10 +34,10 @@ def at_start(plan_id, k=0, **pose):
 class PolicyTest(unittest.TestCase):
     def test_every_plan_has_checkpoints_and_the_team_size_picks_one(self):
         self.assertEqual(sorted(POLICIES.checkpoints, key=int), ['1', '2', '3', '4', '5', '6', '7'])
-        self.assertTrue(POLICIES.checkpoint_for('7', 1).endswith('m7_g1.pt'))
-        self.assertTrue(POLICIES.checkpoint_for('7', 2).endswith('m7_g2.pt'))
-        self.assertTrue(POLICIES.checkpoint_for('7', 6).endswith('m7_g3.pt'))
-        self.assertTrue(POLICIES.checkpoint_for('1', 4).endswith('m1_g1.pt'))
+        self.assertEqual(POLICIES.checkpoint_for('7', 1), ('m7_g1.pt', 1))
+        self.assertEqual(POLICIES.checkpoint_for('7', 2), ('m7_g2.pt', 2))
+        self.assertEqual(POLICIES.checkpoint_for('7', 6), ('m7_g3.pt', 3))
+        self.assertEqual(POLICIES.checkpoint_for('1', 4), ('m1_g1.pt', 1))
 
     def test_actions_are_in_the_training_action_space(self):
         for plan_id, team in (('2', 1), ('3', 2), ('6', 3)):
@@ -152,6 +152,8 @@ class ServerTest(unittest.TestCase):
         del body['agents']
         status = self.post(body, '/demonstrate')
         self.assertEqual((status['demos'], status['blend']), (1, 0.7))
+        self.assertEqual(self.post({'player': 'carol', 'plan': '2'}, '/status')['demos'], 1)
+        self.assertEqual(self.post({'player': 'carol', 'plan': '2'}, '/flush'), {})
         self.assertEqual(self.post({'player': 'carol', 'plan': '2'}, '/reset'), {})
         self.assertEqual(self.post({'player': 'carol'}, '/forget'), {})
 
